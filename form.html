@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>One-Year Activity Graph – Serializd Theme</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!--  Web-component  -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@hsablonniere/activity-graph/+esm"></script>
+    <!--  parser  -->
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #101214;
+            --fg: #f4f4f4;
+            --accent: #0d9488;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, system-ui
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--fg);
+            display: flex;
+            flex-direction: column;
+            align-items: center
+        }
+
+        h1 {
+            margin: .6rem 0;
+            font-size: 1.5rem
+        }
+
+        /* fixed toolbar (always visible) */
+        #toolbar {
+            display: flex;
+            gap: .75rem;
+            align-items: center;
+            margin: .5rem 0 1rem 0;
+        }
+
+        button,
+        input,
+        select {
+            padding: .45rem .7rem;
+            background: var(--bg);
+            color: var(--fg);
+            border: 2px solid var(--fg);
+            cursor: pointer;
+            border-radius: 3px
+        }
+
+        button:hover {
+            background: var(--accent);
+            color: #000
+        }
+
+        /* year-graph */
+        #graphWrap {
+            max-width: 88vw;
+            overflow-x: auto;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, .45);
+            border-radius: 6px;
+        }
+
+        /* ---------- SERIALIZD THEME ---------- */
+        activity-graph.serializd {
+            --size: 14px;
+            background: #0d0f12;
+            color: #f4f4f4;
+            display: inline-grid;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial;
+            gap: 1px;
+            padding: 1rem;
+        }
+
+        activity-graph.serializd::part(weekday-header),
+        activity-graph.serializd::part(month-header) {
+            font-size: 11px
+        }
+
+        activity-graph.serializd::part(weekday-header),
+        activity-graph.serializd::part(day) {
+            height: var(--size);
+            line-height: var(--size)
+        }
+
+        activity-graph.serializd::part(day) {
+            width: var(--size);
+            background: #181c20;
+            transition: transform .12s ease, box-shadow .12s ease
+        }
+
+        activity-graph.serializd::part(day):hover {
+            transform: scale(1.25);
+            background: #0d9488;
+            z-index: 2
+        }
+
+        activity-graph.serializd::part(day selected) {
+            box-shadow: 0 0 6px 2px #0d9488;
+            /* background: inherit;  -- REMOVED THIS LINE */
+            outline: 2px solid #0d9488;
+            border-radius: 2px;
+            z-index: 5;
+        }
+
+        activity-graph.serializd::part(day--data-1) {
+            background: rgba(13, 148, 136, .4)
+        }
+
+        activity-graph.serializd::part(day--data-2) {
+            background: rgba(13, 148, 136, .5)
+        }
+
+        activity-graph.serializd::part(day--data-3) {
+            background: rgba(13, 148, 136, .6)
+        }
+
+        activity-graph.serializd::part(day--data-4) {
+            background: rgba(13, 148, 136, .7)
+        }
+
+        activity-graph.serializd::part(day--data-5) {
+            background: rgba(13, 148, 136, .85)
+        }
+
+        activity-graph.serializd::part(day--data-6) {
+            background: #0d9488
+        }
+
+        /* side panel (always open) */
+        #sidePanel {
+            margin-top: 1rem;
+            background: #15171a;
+            border: 1px solid #2a2f35;
+            padding: .8rem 1rem;
+            border-radius: 4px;
+            min-width: 22rem;
+            max-width: 88vw
+        }
+
+        label {
+            font-size: .9rem
+        }
+
+        #toast {
+            position: fixed;
+            bottom: 18px;
+            right: 18px;
+            padding: .55rem 1rem;
+            background: #0d9488;
+            color: #000;
+            border-radius: 4px;
+            font-size: .85rem;
+            opacity: 0;
+            transition: opacity .3s
+        }
+
+        #toast.show {
+            opacity: 1
+        }
+    </style>
+</head>
+
+<body>
+    <h1>2024–2025 yearly tracker</h1>
+
+    <nav id="toolbar">
+        <label for="graphSelect">Graph:</label>
+        <select id="graphSelect">
+            <option value="default">default</option>
+        </select>
+        <button id="renameBtn" title="Rename graph">✏️</button>
+        <button id="dateSelectBtn" title="Jump to a specific month">📆</button>
+    </nav>
+
+    <div id="graphWrap">
+        <activity-graph id="graph" class="serializd" start-date="2025-01-01" end-date="2025-12-31"
+            weekday-headers="narrow" month-headers="short" month-limits="late"></activity-graph>
+    </div>
+
+
+    <section id="sidePanel">
+        <label for="entryInput">What happened on <strong id="panelDay"></strong>?</label>
+        <input id="entryInput" maxlength="128" placeholder="128 chars max…" type="text">
+        <button id="addBtn">add</button>
+        <button id="delBtn" style="display:none">delete all entries</button>
+        <ul id="entryList" style="margin:.5rem 0;padding-left:1.2em;"></ul>
+    </section>
+
+
+    <div id="toast"></div>
+
+    <script>
+        /* ---------- tiny helpers ---------- */
+        const $ = q => document.querySelector(q);
+        const fmt = d => d.toISOString().slice(0, 10);
+        const toast = msg => {
+            const t = $('#toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2200);
+        };
+
+        /* ---------- file API ---------- */
+        class VFS {
+            constructor(name = 'neo') {
+                const r = indexedDB.open(name, 1);
+                r.onupgradeneeded = e => e.target.result.createObjectStore('files');
+
+                // Store the promise that resolves when the DB is ready
+                this._dbPromise = new Promise((resolve, reject) => {
+                    r.onsuccess = () => resolve(r.result);
+                    r.onerror = () => reject(r.error);
+                });
+            }
+
+            async fetch(f) {
+                const db = await this._dbPromise; // Await the database connection
+                return new Promise(res => {
+                    const x = db.transaction('files').objectStore('files').get(f);
+                    x.onsuccess = () => res(x.result || {});
+                    x.onerror = () => { // Add error handling
+                        console.error("Fetch error:", x.error);
+                        res({}); // Return empty if error
+                    };
+                });
+            }
+
+            async save(f, data) {
+                const db = await this._dbPromise; // Await the database connection
+                return new Promise((res, reject) => {
+                    const tx = db.transaction('files', 'readwrite').objectStore('files').put(data, f);
+                    tx.onsuccess = () => res();
+                    tx.onerror = () => { // Add error handling
+                        console.error("Save error:", tx.error);
+                        reject(tx.error); // Reject the promise if error
+                    };
+                });
+            }
+        }
+        const fs = new VFS();
+
+        let curBoard = 'default';
+        let curSelected = fmt(new Date());
+        let graph = $('#graph'); // Get graph element reference once
+
+        /* ---------- year render ---------- */
+        async function renderYear() {
+            const yearFile = curSelected.slice(0, 4) + '.data.yaml';
+            let db = await fs.fetch(yearFile);
+            const boardObj = db[curBoard] || {};
+            const data = {};
+            for (const date in boardObj) {
+                const n = boardObj[date].length;
+                data[date] = {
+                    parts: ['day--data-' + Math.min(n, 6)],
+                    title: `${n} item${n !== 1 ? 's' : ''}`
+                }
+            }
+            console.log("Data for graph:", data);
+            graph.data = data;
+
+            // highlight selected
+            // This logic should ideally be handled within the graph component itself on data updates
+            // or ensure the `selected` attribute correctly reflects `curSelected`.
+            // For now, keep it, but be aware it's a manual override.
+            graph.shadowRoot?.querySelector(`[data-date="${curSelected}"]`)?.setAttribute('part', 'day selected');
+        }
+
+        /* ---------- panel interactions ---------- */
+        let prevSelectedCell = null; // Stays global for highlight management
+
+        graph.addEventListener('click', e => {
+            // Use composedPath() to get the actual element clicked, even within Shadow DOM
+            const clickedElement = e.composedPath()[0];
+
+            // Check if the clicked element has the data-date attribute
+            if (!clickedElement?.dataset?.date) {
+                console.log("Clicked but not a day cell (via composedPath)");
+                return; // Not a day cell, exit
+            }
+
+            const newSelectedDate = clickedElement.dataset.date;
+
+            // Remove highlight from previous cell if it exists and is different from the new one
+            if (prevSelectedCell && prevSelectedCell !== clickedElement) {
+                // Remove 'selected' part, restoring its original parts (including data-level)
+                const currentParts = prevSelectedCell.getAttribute('part');
+                const partsArray = currentParts ? currentParts.split(' ').filter(p => p !== 'selected').join(' ') : '';
+                prevSelectedCell.setAttribute('part', partsArray);
+                console.log(`Removed highlight from previous cell: ${prevSelectedCell.dataset.date}. New parts: '${partsArray}'`);
+            }
+
+            curSelected = newSelectedDate;
+            console.log("Updating curSelected to:", curSelected);
+            showPanel(curSelected);
+
+            // Store the newly selected cell for future clicks
+            prevSelectedCell = clickedElement;
+
+            // Explicitly set the 'selected' part on the clicked cell
+            // This ensures the visual highlight and _adds_ 'selected' to any existing parts
+            const currentParts = clickedElement.getAttribute('part');
+            const partsToAdd = currentParts ? `${currentParts} selected` : 'day selected'; // Ensure 'day' part is always present
+            console.log(`Highlighting clicked cell: ${clickedElement.dataset.date}. Setting parts to: '${partsToAdd}'`);
+            clickedElement.setAttribute('part', partsToAdd);
+        });
+
+
+        function showPanel(date) {
+            $('#panelDay').textContent = date;
+            $('#sidePanel').style.display = 'block';
+            refreshPanel(date);
+        }
+
+        async function refreshPanel(date) {
+            const yrFile = date.slice(0, 4) + '.data.yaml';
+            const db = await fs.fetch(yrFile);
+            const list = (db[curBoard] || {})[date] || [];
+            $('#entryList').innerHTML = list.map((e, i) => `<li>${e.description}</li>`).join('');
+            // FIX: corrected the display value
+            $('#delBtn').style.display = list.length ? 'inline-block' : 'none';
+        }
+
+        /* ---------- form events ---------- */
+        $('#addBtn').onclick = async () => {
+            const txt = $('#entryInput').value.trim();
+            if (!txt || txt.length > 128) { toast('invalid'); return; }
+
+            const yrFile = curSelected.slice(0, 4) + '.data.yaml';
+            let db = await fs.fetch(yrFile);
+            db[curBoard] = db[curBoard] || {};
+            db[curBoard][curSelected] = db[curBoard][curSelected] || [];
+            db[curBoard][curSelected].push({ description: txt });
+            await fs.save(yrFile, db);
+            $('#entryInput').value = '';
+            refreshPanel(curSelected);
+            renderYear(); // Re-render year graph to update activity intensity
+            toast('added');
+        };
+
+        $('#delBtn').onclick = async () => {
+            const yrFile = curSelected.slice(0, 4) + '.data.yaml';
+            let db = await fs.fetch(yrFile);
+            if (db[curBoard]) delete db[curBoard][curSelected];
+            await fs.save(yrFile, db);
+            refreshPanel(curSelected);
+            renderYear(); // Re-render year graph to update activity intensity
+            toast('deleted');
+        };
+
+        // Corrected placement for rename and graph select handlers
+        $('#renameBtn').addEventListener('click', async () => {
+            const newName = prompt('New graph name:', curBoard);
+            if (!newName || newName === curBoard) return;
+            const ym = curSelected.slice(0, 7); // Use curSelected consistently
+            let yrFile = curSelected.slice(0, 4) + '.data.yaml'; // Always work with the year file
+            let db = await fs.fetch(yrFile);
+
+            db[newName] = db[curBoard] || {}; // Copy data from old board to new
+            delete db[curBoard]; // Delete old board
+            await fs.save(yrFile, db);
+
+            curBoard = newName;
+            refreshBoards(); // Update dropdown
+            renderYear(); // Re-render graph
+            toast('renamed');
+        });
+
+        $('#graphSelect').addEventListener('change', e => {
+            curBoard = e.target.value;
+            renderYear(); // Re-render graph for new board
+            showPanel(curSelected); // Re-render panel for new board's data
+        });
+
+        // Input limit validation
+        const entryInput = $('#entryInput');
+        entryInput.addEventListener('input', () => {
+            const bad = entryInput.value.length > 128;
+            // You had $('#valMsg') but no such element in HTML. Let's assume you'd show this visually
+            // For now, let's just use console.log or remove if not needed.
+            // If you want a visual message, add <div id="valMsg" style="color:red; display:none;">Too long!</div>
+            // below your input field.
+            // For demonstration, commenting out:
+            // $('#valMsg').style.visibility = bad ? 'visible' : 'hidden';
+        });
+
+
+        /* --------------- boards selector --------------- */
+        async function refreshBoards() {
+            const graphSelect = $('#graphSelect'); // Get graphSelect element reference
+
+            // Fetch all unique board names from all year files in storage
+            // Await the database promise first
+            const db = await fs._dbPromise; // Get the database instance
+
+            const allFiles = await new Promise((res) => { // Added reject for good practice, though not strictly needed for this type of success-only block
+                const tx = db.transaction('files').objectStore('files');
+                const req = tx.getAllKeys();
+                req.onsuccess = () => {
+                    const keys = req.result.filter(k => k.endsWith('.data.yaml'));
+                    Promise.all(keys.map(key => fs.fetch(key))).then(results => {
+                        const allBoards = new Set();
+                        results.forEach(fileData => {
+                            Object.keys(fileData).forEach(boardName => allBoards.add(boardName));
+                        });
+                        res(Array.from(allBoards));
+                    });
+                };
+                req.onerror = (event) => { // Added error handling
+                    console.error("Failed to get all keys from IndexedDB:", event.target.error);
+                    res([]); // Resolve with empty array on error
+                };
+            });
+
+            graphSelect.innerHTML = ''; // Clear existing options
+            allFiles.forEach(boardName => {
+                graphSelect.add(new Option(boardName, boardName));
+            });
+
+            // Ensure 'default' always exists if no other boards were found
+            // This logic should be here, but consider if `default` should always be an option regardless
+            if (!allFiles.includes('default') && allFiles.length === 0) {
+                graphSelect.add(new Option('default', 'default'));
+                curBoard = 'default'; // Ensure default is selected if newly added
+            }
+
+
+            // Select the current board
+            const options = [...graphSelect.options];
+            const currentOption = options.find(o => o.value === curBoard);
+            if (currentOption) {
+                currentOption.selected = true;
+            } else if (options.length > 0) {
+                // If current board is not found (e.g., deleted), select the first available
+                curBoard = options[0].value;
+                options[0].selected = true;
+            } else {
+                // If for some reason there are no boards at all (e.g., deleted all), ensure 'default' is selected.
+                // This might be redundant with the `if (!allFiles.includes('default') && allFiles.length === 0)` block,
+                // but ensures `curBoard` always points to *something* existing.
+                graphSelect.add(new Option('default', 'default'));
+                curBoard = 'default';
+                graphSelect.options[0].selected = true;
+            }
+        }
+
+
+
+        /* --------------- bootstrap --------------- */
+        (async () => {
+            const today = fmt(new Date());
+            curSelected = today; // Initialize curSelected
+            const yearFile = curSelected.slice(0, 4) + '.data.yaml';
+
+            // create year file if missing for the current year
+            if (!await fs.fetch(yearFile)) {
+                await fs.save(yearFile, { default: {} });
+            }
+
+            await refreshBoards(); // Populate graph selection dropdown
+            showPanel(curSelected); // Display side panel for today
+            renderYear(); // Render the graph for the current year and board
+
+            // Highlight the initially selected day after graph has rendered
+            // Using a short timeout to ensure shadow DOM is fully ready can sometimes help,
+            // but direct access after await should be sufficient.
+            const initialSelectedCell = graph.shadowRoot?.querySelector(`[data-date="${curSelected}"]`);
+            if (initialSelectedCell) {
+                initialSelectedCell.setAttribute('part', 'day selected');
+                prevSelectedCell = initialSelectedCell; // Initialize prevSelectedCell
+            }
+        })();
+    </script>
+
+    <!-- ========== tool tips for everybody ========== -->
+    <script>(() => { /* naive tooltip strategy */
+            document.addEventListener('mouseover', e => {
+                const tip = e.target.getAttribute('title');
+                if (!tip) return;
+                const span = document.createElement('span');
+                span.className = 'toolTip';
+                span.textContent = tip;
+                span.style.position = 'absolute'; span.style.bottom = '2px'; span.style.left = '5px';
+                span.style.fontSize = '0.7rem'; span.style.background = '#000'; span.style.color = '#fff'; span.style.padding = '2px 5px'; span.style.borderRadius = '3px'; span.style.zIndex = 99;
+                e.target.append(span);
+            }, { once: false, capture: false });
+            document.addEventListener('mouseout', e => document.querySelectorAll('.toolTip').forEach(t => t.remove()));
+        })();
+    </script>
+
+</body>
+
+</html>

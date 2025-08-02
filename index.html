@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Activity Graph Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body>
+  <h1 style="font-family:Inter,sans-serif;text-align:center;margin-top:2rem">
+    See <a href="form.html">form.html</a> for the interactive editor.<br/>
+    Here is a read-only preview of the current default graph for July 2025:
+  </h1>
+  <activity-graph
+    start-date="2025-07-01" end-date="2025-07-31"
+    week-start-day="1" weekday-headers="short" month-headers="short">
+  </activity-graph>
+  <script type="module">
+    import yaml from 'https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.mjs';
+    import 'https://cdn.jsdelivr.net/npm/@hsablonniere/activity-graph/+esm';
+    const yamlKey='2025-07.data.yaml';
+    const raw=localStorage.getItem(yamlKey)||'{}';
+    const data=yaml.load(raw)||{};
+    const payload={};
+    Object.keys(data).forEach(k=>{
+        if(k.slice(0,7)!=='2025-07') return;
+        const e=data[k]?.default;
+        if(e){
+            payload[k]={
+                title:[e.description].concat(Object.entries(e).filter(([k])=>k!=='description').map(([k,v])=>`${k}:${v}`)).join('\n'),
+                parts:[`level-${Math.min(4,Object.values(e).filter(Boolean).length)||'null'}`]
+            };
+        }
+    });
+    document.querySelector('activity-graph').data=payload;
+  </script>
+  <style>
+    body{background:#fafafa;display:flex;flex-direction:column;align-items:center}
+    activity-graph{--activity-graph-month-gap:.6rem;font-family:Inter,sans-serif;}
+    activity-graph::part(day[level-1]){background:#c6e48b;}
+    activity-graph::part(day[level-2]){background:#7bc96f;}
+    activity-graph::part(day[level-3]){background:#239a3b;}
+    activity-graph::part(day[level-4]){background:#196127;}
+  </style>
+</body>
+</html>
