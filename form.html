@@ -211,43 +211,130 @@
         };
 
         /* ---------- file API ---------- */
-        class VFS {
-            constructor(name = 'neo') {
-                const r = indexedDB.open(name, 1);
-                r.onupgradeneeded = e => e.target.result.createObjectStore('files');
-
-                // Store the promise that resolves when the DB is ready
-                this._dbPromise = new Promise((resolve, reject) => {
-                    r.onsuccess = () => resolve(r.result);
-                    r.onerror = () => reject(r.error);
-                });
+        class FileSystemVFS {
+            constructor() {
+                this._rootPromise = null;
+                this._initPromise = this._init();
             }
 
-            async fetch(f) {
-                const db = await this._dbPromise; // Await the database connection
-                return new Promise(res => {
-                    const x = db.transaction('files').objectStore('files').get(f);
-                    x.onsuccess = () => res(x.result || {});
-                    x.onerror = () => { // Add error handling
-                        console.error("Fetch error:", x.error);
-                        res({}); // Return empty if error
-                    };
-                });
+            async _init() {
+                try {
+                    if (!navigator.storage || !navigator.storage.getDirectory) {
+                        throw new Error('File System Access API not supported - use Chrome browser');
+                    }
+                    
+                    const root = await navigator.storage.getDirectory();
+                    this._rootPromise = Promise.resolve(root);
+                    
+                    // Create data directory if it doesn't exist
+                    try {
+                        await root.getDirectoryHandle('data', { create: true });
+                    } catch (e) {
+                        // Directory already exists or create failed
+                        console.log('Data directory setup:', e.message || 'OK');
+                    }
+                    
+                    console.log('File System Access API initialized successfully');
+                } catch (error) {
+                    console.error('Failed to initialize File System Access API:', error);
+                    toast('Storage initialization failed - using Chrome?');
+                    throw error;
+                }
             }
 
-            async save(f, data) {
-                const db = await this._dbPromise; // Await the database connection
-                return new Promise((res, reject) => {
-                    const tx = db.transaction('files', 'readwrite').objectStore('files').put(data, f);
-                    tx.onsuccess = () => res();
-                    tx.onerror = () => { // Add error handling
-                        console.error("Save error:", tx.error);
-                        reject(tx.error); // Reject the promise if error
-                    };
+            async _getRoot() {
+                await this._initPromise;
+                return this._rootPromise;
+            }
+
+            async _readFile(handle) {
+                const file = await handle.getFile();
+                const contents = await file.text();
+                try {
+                    return jsyaml.load(contents) || {};
+                } catch (e) {
+                    console.warn(`Failed to parse YAML file ${handle.name}, using empty object`);
+                    return {};
+                }
+            }
+
+            async _writeFile(handle, data) {
+                const yaml = jsyaml.dump(data, { 
+                    defaultFlowStyle: false,
+                    lineWidth: -1 
                 });
+                const writable = await handle.createWritable();
+                await writable.write(yaml);
+                await writable.close();
+            }
+
+            async fetch(filename) {
+                try {
+                    await this._initPromise;
+                    const root = await this._getRoot();
+                    
+                    // Handle monthly files: YYYY-MM.data.yaml
+                    if (filename.includes('-') && filename.endsWith('.data.yaml')) {
+                        const dataDir = await root.getDirectoryHandle('data', { create: true });
+                        try {
+                            const fileHandle = await dataDir.getFileHandle(filename);
+                            return this._readFile(fileHandle);
+                        } catch (e) {
+                            // File doesn't exist, return empty object
+                            console.log(`File ${filename} not found, returning empty`);
+                            return {};
+                        }
+                    }
+                    
+                    // Handle yearly files (for backward compatibility during migration)
+                    if (filename.endsWith('.data.yaml')) {
+                        try {
+                            const fileHandle = await root.getFileHandle(filename);
+                            return this._readFile(fileHandle);
+                        } catch (e) {
+                            console.log(`Yearly file ${filename} not found, returning empty`);
+                            return {};
+                        }
+                    }
+                    
+                    return {};
+                } catch (error) {
+                    console.error(`Error fetching ${filename}:`, error);
+                    return {};
+                }
+            }
+
+            async save(filename, data) {
+                try {
+                    await this._initPromise;
+                    const root = await this._getRoot();
+                    
+                    // Handle monthly files: YYYY-MM.data.yaml
+                    if (filename.includes('-') && filename.endsWith('.data.yaml')) {
+                        const dataDir = await root.getDirectoryHandle('data', { create: true });
+                        const fileHandle = await dataDir.getFileHandle(filename, { create: true });
+                        await this._writeFile(fileHandle, data);
+                        console.log(`Saved monthly file: ${filename}`);
+                        return;
+                    }
+                    
+                    // Handle yearly files (for backward compatibility)
+                    if (filename.endsWith('.data.yaml')) {
+                        const fileHandle = await root.getFileHandle(filename, { create: true });
+                        await this._writeFile(fileHandle, data);
+                        console.log(`Saved yearly file: ${filename}`);
+                        return;
+                    }
+                    
+                    throw new Error(`Unsupported file type: ${filename}`);
+                } catch (error) {
+                    console.error(`Error saving ${filename}:`, error);
+                    toast(`Failed to save ${filename}`);
+                    throw error;
+                }
             }
         }
-        const fs = new VFS();
+        const fs = new FileSystemVFS();
 
         let curBoard = 'default';
         let curSelected = fmt(new Date());
@@ -399,55 +486,64 @@
         async function refreshBoards() {
             const graphSelect = $('#graphSelect'); // Get graphSelect element reference
 
-            // Fetch all unique board names from all year files in storage
-            // Await the database promise first
-            const db = await fs._dbPromise; // Get the database instance
+            try {
+                // Fetch all unique board names from all year/month files in storage
+                const currentYear = new Date().getFullYear();
+                const allBoards = new Set();
+                
+                // Check for existing files by trying to fetch common patterns
+                const filePatterns = [
+                    `${currentYear}.data.yaml`,
+                    `${currentYear - 1}.data.yaml`,
+                    // Check a few recent months
+                    ...Array.from({length: 12}, (_, i) => {
+                        const year = currentYear;
+                        const month = String(i + 1).padStart(2, '0');
+                        return `${year}-${month}.data.yaml`;
+                    })
+                ];
 
-            const allFiles = await new Promise((res) => { // Added reject for good practice, though not strictly needed for this type of success-only block
-                const tx = db.transaction('files').objectStore('files');
-                const req = tx.getAllKeys();
-                req.onsuccess = () => {
-                    const keys = req.result.filter(k => k.endsWith('.data.yaml'));
-                    Promise.all(keys.map(key => fs.fetch(key))).then(results => {
-                        const allBoards = new Set();
-                        results.forEach(fileData => {
-                            Object.keys(fileData).forEach(boardName => allBoards.add(boardName));
-                        });
-                        res(Array.from(allBoards));
-                    });
-                };
-                req.onerror = (event) => { // Added error handling
-                    console.error("Failed to get all keys from IndexedDB:", event.target.error);
-                    res([]); // Resolve with empty array on error
-                };
-            });
+                // Try to fetch each file and collect board names
+                for (const filename of filePatterns) {
+                    try {
+                        const fileData = await fs.fetch(filename);
+                        Object.keys(fileData).forEach(boardName => allBoards.add(boardName));
+                    } catch (e) {
+                        // File doesn't exist or can't be read, skip
+                        continue;
+                    }
+                }
 
-            graphSelect.innerHTML = ''; // Clear existing options
-            allFiles.forEach(boardName => {
-                graphSelect.add(new Option(boardName, boardName));
-            });
+                graphSelect.innerHTML = ''; // Clear existing options
+                const boardList = Array.from(allBoards);
+                
+                // Always ensure 'default' exists
+                if (!boardList.includes('default')) {
+                    boardList.unshift('default');
+                }
 
-            // Ensure 'default' always exists if no other boards were found
-            // This logic should be here, but consider if `default` should always be an option regardless
-            if (!allFiles.includes('default') && allFiles.length === 0) {
-                graphSelect.add(new Option('default', 'default'));
-                curBoard = 'default'; // Ensure default is selected if newly added
-            }
+                boardList.forEach(boardName => {
+                    graphSelect.add(new Option(boardName, boardName));
+                });
 
-
-            // Select the current board
-            const options = [...graphSelect.options];
-            const currentOption = options.find(o => o.value === curBoard);
-            if (currentOption) {
-                currentOption.selected = true;
-            } else if (options.length > 0) {
-                // If current board is not found (e.g., deleted), select the first available
-                curBoard = options[0].value;
-                options[0].selected = true;
-            } else {
-                // If for some reason there are no boards at all (e.g., deleted all), ensure 'default' is selected.
-                // This might be redundant with the `if (!allFiles.includes('default') && allFiles.length === 0)` block,
-                // but ensures `curBoard` always points to *something* existing.
+                // Select the current board
+                const currentOption = [...graphSelect.options].find(o => o.value === curBoard);
+                if (currentOption) {
+                    currentOption.selected = true;
+                } else if (graphSelect.options.length > 0) {
+                    // If current board not found, select the first available
+                    curBoard = graphSelect.options[0].value;
+                    graphSelect.options[0].selected = true;
+                } else {
+                    // Fallback: ensure at least 'default' exists
+                    graphSelect.add(new Option('default', 'default'));
+                    curBoard = 'default';
+                    graphSelect.options[0].selected = true;
+                }
+            } catch (error) {
+                console.error('Error refreshing boards:', error);
+                // Fallback: create at least the default option
+                graphSelect.innerHTML = '';
                 graphSelect.add(new Option('default', 'default'));
                 curBoard = 'default';
                 graphSelect.options[0].selected = true;
@@ -455,6 +551,80 @@
         }
 
 
+
+        /* --------------- debug helpers --------------- */
+        async function debugFileSystem() {
+            try {
+                const root = await fs._getRoot();
+                
+                console.log('=== File System Debug ===');
+                console.log('Root directory accessible:', !!root);
+                
+                const files = [];
+                
+                // Check root directory for yearly files
+                try {
+                    console.log('Checking root directory for yearly files...');
+                    const rootEntries = await root.values();
+                    for await (const entry of rootEntries) {
+                        if (entry.name.endsWith('.data.yaml') && !entry.name.includes('-')) {
+                            files.push(`root/${entry.name}`);
+                            const data = await fs.fetch(entry.name);
+                            console.log(`File: root/${entry.name}`, data);
+                        }
+                    }
+                } catch (e) {
+                    console.log('Root directory access error:', e.message);
+                }
+                
+                // Check data directory for monthly files
+                try {
+                    console.log('Checking data directory for monthly files...');
+                    const dataDir = await root.getDirectoryHandle('data');
+                    console.log('Data directory accessible:', !!dataDir);
+                    
+                    const dataEntries = await dataDir.values();
+                    for await (const entry of dataEntries) {
+                        if (entry.name.endsWith('.data.yaml')) {
+                            files.push(`data/${entry.name}`);
+                            const data = await fs.fetch(entry.name);
+                            console.log(`File: data/${entry.name}`, data);
+                        }
+                    }
+                } catch (e) {
+                    console.log('Data directory access error (may not exist yet):', e.message);
+                }
+                
+                console.log('Total found files:', files.length, files);
+                
+                // Also test common file patterns
+                console.log('Testing common file access...');
+                const testFiles = ['2025.data.yaml', '2025-08.data.yaml', '2025-07.data.yaml'];
+                for (const filename of testFiles) {
+                    try {
+                        const data = await fs.fetch(filename);
+                        const keys = Object.keys(data);
+                        if (keys.length > 0) {
+                            console.log(`Access test PASSED for ${filename}:`, keys);
+                        }
+                    } catch (e) {
+                        console.log(`Access test FAILED for ${filename}:`, e.message);
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Debug failed:', error);
+            }
+        }
+
+        // Add debug button to toolbar
+        setTimeout(() => {
+            const debugBtn = document.createElement('button');
+            debugBtn.textContent = '🔍';
+            debugBtn.title = 'Debug filesystem';
+            debugBtn.onclick = debugFileSystem;
+            document.getElementById('toolbar').appendChild(debugBtn);
+        }, 1000);
 
         /* --------------- bootstrap --------------- */
         (async () => {

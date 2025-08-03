@@ -36,11 +36,17 @@ This document tracks the implementation status of requirements from `docs/initia
 | 4 | User can select different activity graphs from dropdown | ❌ **PARTIAL** | Current: Only "default" option<br>Required: Multiple predefined types ("coding", "swimming", "learning") |
 | 5 | User can click "add" button to enter new activity | ❌ **MISSING UI** | Current: Enter key only<br>Required: Explicit "add" button |
 
+### 📅 **FUTURE ENHANCEMENTS (1)** - Beyond MVP
+
+| # | Requirement | Status | Description |
+|---|-------------|--------|-------------|
+| 1 | Multi-browser compatibility | 📅 **POST-MVP** | Current: Chrome-only filesystem storage<br>Future: Add IndexedDB fallback for Firefox/Safari support |
+
 ## Next Tasks TODO
 
 ### **HIGH PRIORITY (Core Functionality)**
 
-1. **Implement filesystem-based YAML storage** 
+1. **Implement filesystem-based YAML storage**
    - Replace IndexedDB VFS class with File System Access API
    - Create monthly YAML file structure
    - Implement direct file loading/saving
@@ -83,6 +89,7 @@ This document tracks the implementation status of requirements from `docs/initia
 ## Current Architecture
 
 The application currently uses:
+
 - **Storage**: IndexedDB with YAML serialization via VFS class
 - **Data Structure**: One YAML file per year (e.g., `2025-07.data.yaml`)
 - **UI**: Single HTML file with embedded CSS/JS
