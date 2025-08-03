@@ -111,6 +111,8 @@ graph TD
 
 No build system required. Serve locally:
 ```bash
+live-server --port=8000 --open=form.html --host=localhost
+# or
 python -m http.server 8000
 # or
 npx serve .
@@ -160,3 +162,10 @@ graph LR
 | Storage System | ⚠️ Temporary | Replace with filesystem |
 | File Organization | ⚠️ Yearly | Convert to monthly |
 | Board System | ⚠️ Basic only | Add predefined types |
+
+## Browser Testing with Playwright MCP
+
+For web testing and browser automation, use Playwright MCP tools:
+- Navigate: `mcp__playwright__browser_navigate(url)`
+- Interact: `mcp__playwright__browser_click(element, ref)`
+- Wait: `mcp__playwright__browser_wait_for(time)`

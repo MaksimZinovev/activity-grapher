@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:caniuse.com)"
+      "WebFetch(domain:caniuse.com)",
+      "mcp__playwright__browser_navigate"
     ],
     "deny": []
   }
