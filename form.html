@@ -342,8 +342,8 @@
 
         /* ---------- year render ---------- */
         async function renderYear() {
-            const yearFile = curSelected.slice(0, 4) + '.data.yaml';
-            let db = await fs.fetch(yearFile);
+            const ymFile = curSelected.slice(0, 7) + '.data.yaml';
+            let db = await fs.fetch(ymFile);
             const boardObj = db[curBoard] || {};
             const data = {};
             for (const date in boardObj) {
@@ -410,8 +410,8 @@
         }
 
         async function refreshPanel(date) {
-            const yrFile = date.slice(0, 4) + '.data.yaml';
-            const db = await fs.fetch(yrFile);
+            const ymFile = date.slice(0, 7) + '.data.yaml';
+            const db = await fs.fetch(ymFile);
             const list = (db[curBoard] || {})[date] || [];
             $('#entryList').innerHTML = list.map((e, i) => `<li>${e.description}</li>`).join('');
             // FIX: corrected the display value
@@ -423,12 +423,12 @@
             const txt = $('#entryInput').value.trim();
             if (!txt || txt.length > 128) { toast('invalid'); return; }
 
-            const yrFile = curSelected.slice(0, 4) + '.data.yaml';
-            let db = await fs.fetch(yrFile);
+            const ymFile = curSelected.slice(0, 7) + '.data.yaml';
+            let db = await fs.fetch(ymFile);
             db[curBoard] = db[curBoard] || {};
             db[curBoard][curSelected] = db[curBoard][curSelected] || [];
             db[curBoard][curSelected].push({ description: txt });
-            await fs.save(yrFile, db);
+            await fs.save(ymFile, db);
             $('#entryInput').value = '';
             refreshPanel(curSelected);
             renderYear(); // Re-render year graph to update activity intensity
@@ -436,10 +436,10 @@
         };
 
         $('#delBtn').onclick = async () => {
-            const yrFile = curSelected.slice(0, 4) + '.data.yaml';
-            let db = await fs.fetch(yrFile);
+            const ymFile = curSelected.slice(0, 7) + '.data.yaml';
+            let db = await fs.fetch(ymFile);
             if (db[curBoard]) delete db[curBoard][curSelected];
-            await fs.save(yrFile, db);
+            await fs.save(ymFile, db);
             refreshPanel(curSelected);
             renderYear(); // Re-render year graph to update activity intensity
             toast('deleted');
@@ -449,13 +449,12 @@
         $('#renameBtn').addEventListener('click', async () => {
             const newName = prompt('New graph name:', curBoard);
             if (!newName || newName === curBoard) return;
-            const ym = curSelected.slice(0, 7); // Use curSelected consistently
-            let yrFile = curSelected.slice(0, 4) + '.data.yaml'; // Always work with the year file
-            let db = await fs.fetch(yrFile);
+            const ymFile = curSelected.slice(0, 7) + '.data.yaml';
+            let db = await fs.fetch(ymFile);
 
             db[newName] = db[curBoard] || {}; // Copy data from old board to new
             delete db[curBoard]; // Delete old board
-            await fs.save(yrFile, db);
+            await fs.save(ymFile, db);
 
             curBoard = newName;
             refreshBoards(); // Update dropdown
@@ -491,14 +490,13 @@
                 const currentYear = new Date().getFullYear();
                 const allBoards = new Set();
                 
-                // Check for existing files by trying to fetch common patterns
+                // Check for existing files by trying to fetch monthly patterns
                 const filePatterns = [
-                    `${currentYear}.data.yaml`,
-                    `${currentYear - 1}.data.yaml`,
-                    // Check a few recent months
-                    ...Array.from({length: 12}, (_, i) => {
-                        const year = currentYear;
-                        const month = String(i + 1).padStart(2, '0');
+                    // Check recent months
+                    ...Array.from({length: 24}, (_, i) => {
+                        const date = new Date(currentYear, i, 1);
+                        const year = date.getFullYear();
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
                         return `${year}-${month}.data.yaml`;
                     })
                 ];
@@ -564,10 +562,10 @@
                 
                 // Check root directory for yearly files
                 try {
-                    console.log('Checking root directory for yearly files...');
+                    console.log('Checking root directory for monthly files...');
                     const rootEntries = await root.values();
                     for await (const entry of rootEntries) {
-                        if (entry.name.endsWith('.data.yaml') && !entry.name.includes('-')) {
+                        if (entry.name.endsWith('.data.yaml') && entry.name.includes('-')) {
                             files.push(`root/${entry.name}`);
                             const data = await fs.fetch(entry.name);
                             console.log(`File: root/${entry.name}`, data);
@@ -599,7 +597,7 @@
                 
                 // Also test common file patterns
                 console.log('Testing common file access...');
-                const testFiles = ['2025.data.yaml', '2025-08.data.yaml', '2025-07.data.yaml'];
+                const testFiles = ['2025-07.data.yaml', '2025-08.data.yaml', '2025-06.data.yaml'];
                 for (const filename of testFiles) {
                     try {
                         const data = await fs.fetch(filename);
@@ -630,11 +628,11 @@
         (async () => {
             const today = fmt(new Date());
             curSelected = today; // Initialize curSelected
-            const yearFile = curSelected.slice(0, 4) + '.data.yaml';
+            const ymFile = curSelected.slice(0, 7) + '.data.yaml';
 
-            // create year file if missing for the current year
-            if (!await fs.fetch(yearFile)) {
-                await fs.save(yearFile, { default: {} });
+            // create monthly file if missing for the current month
+            if (!await fs.fetch(ymFile)) {
+                await fs.save(ymFile, { default: {} });
             }
 
             await refreshBoards(); // Populate graph selection dropdown

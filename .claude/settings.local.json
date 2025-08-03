@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:caniuse.com)",
-      "mcp__playwright__browser_navigate"
+      "mcp__playwright__browser_navigate",
+      "Bash(python -m http.server 8000)",
+      "Bash(live-server --port=8000 --host=localhost)",
+      "Bash(pkill -f \"live-server\")",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_handle_dialog",
+      "mcp__playwright__browser_snapshot"
     ],
     "deny": []
   }

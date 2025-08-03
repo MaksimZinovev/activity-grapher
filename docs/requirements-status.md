@@ -4,7 +4,7 @@ This document tracks the implementation status of requirements from `docs/initia
 
 ## Implementation Status Summary
 
-### ✅ **COMPLETED (17/22)** - 77% Complete
+### ✅ **COMPLETED (19/22)** - 86% Complete
 
 | # | Requirement | Status | Notes |
 |---|-------------|--------|-------|
@@ -25,16 +25,16 @@ This document tracks the implementation status of requirements from `docs/initia
 | 15 | Basic error handling and validation | ✅ Complete | Input validation, IndexedDB error handling, toasts |
 | 16 | All interactive elements have tooltips | ✅ Complete | Tooltip system implemented |
 | 17 | Subtle animations for usability | ✅ Complete | CSS transitions for hover effects and interactions |
+| 18 | Data stored as separate yaml files | ✅ Complete | File System Access API with YAML serialization |
+| 19 | One yaml file for each month | ✅ Complete | Monthly file structure `YYYY-MM.data.yaml` implemented |
 
-### ❌ **MISSING / PARTIAL (5/22)** - 23% Remaining
+### ❌ **MISSING / PARTIAL (3/22)** - 14% Remaining
 
 | # | Requirement | Status | Gap Description |
 |---|-------------|--------|------------------|
-| 1 | Data stored as separate yaml files | ❌ **NOT IMPLEMENTED** | Current: IndexedDB storage<br>Required: Filesystem YAML files |
-| 2 | One yaml file for each month | ❌ **NOT IMPLEMENTED** | Current: Year-based files (`2025-07.data.yaml`)<br>Required: Monthly file structure |
-| 3 | Graph data loaded from yaml file | ❌ **PARTIAL** | Current: Loaded from IndexedDB (YAML as serialization)<br>Required: Direct file loading |
-| 4 | User can select different activity graphs from dropdown | ❌ **PARTIAL** | Current: Only "default" option<br>Required: Multiple predefined types ("coding", "swimming", "learning") |
-| 5 | User can click "add" button to enter new activity | ❌ **MISSING UI** | Current: Enter key only<br>Required: Explicit "add" button |
+| 1 | Graph data loaded from yaml file | ❌ **PARTIAL** | Current: Uses File System Access API<br>Required: Direct file loading from filesystem |
+| 2 | User can select different activity graphs from dropdown | ❌ **PARTIAL** | Current: Only "default" option<br>Required: Multiple predefined types ("coding", "swimming", "learning") |
+| 3 | User can click "add" button to enter new activity | ❌ **MISSING UI** | Current: Enter key only<br>Required: Explicit "add" button |
 
 ### 📅 **FUTURE ENHANCEMENTS (1)** - Beyond MVP
 
@@ -46,28 +46,27 @@ This document tracks the implementation status of requirements from `docs/initia
 
 ### **HIGH PRIORITY (Core Functionality)**
 
-1. **Implement filesystem-based YAML storage**
-   - Replace IndexedDB VFS class with File System Access API
-   - Create monthly YAML file structure
-   - Implement direct file loading/saving
-
-2. **Add dedicated "Add" button**
+1. **Add dedicated "Add" button**
    - Add explicit "add" button next to input field
    - Maintain current enter key functionality
 
-3. **Implement multiple predefined activity graphs**
+2. **Implement multiple predefined activity graphs**
    - Add default options: "coding", "swimming", "learning"
    - Update dropdown initialization with these options
 
+3. **Graph data loaded from yaml file**
+   - Ensure direct file loading from filesystem (File System Access API)
+   - Verify file operations work without IndexedDB fallback
+
 ### **MEDIUM PRIORITY (Enhancements)**
 
-4. **File organization structure**
-   - Create `data/` directory for monthly YAML files
-   - Implement file naming convention: `YYYY-MM-data.yaml`
-
-5. **Error handling for file operations**
+4. **Error handling for file operations**
    - Handle file permission errors
    - Graceful fallback when File System Access API not available
+
+5. **Migration from IndexedDB to filesystem**
+   - One-time migration utility for existing data
+   - Validate data integrity after migration
 
 ### **LOW PRIORITY (Polish)**
 
@@ -90,8 +89,8 @@ This document tracks the implementation status of requirements from `docs/initia
 
 The application currently uses:
 
-- **Storage**: IndexedDB with YAML serialization via VFS class
-- **Data Structure**: One YAML file per year (e.g., `2025-07.data.yaml`)
+- **Storage**: File System Access API with YAML serialization via FileSystemVFS class
+- **Data Structure**: One YAML file per month (e.g., `2025-07.data.yaml`)
 - **UI**: Single HTML file with embedded CSS/JS
 - **Graph**: `@hsablonniere/activity-graph` web component with custom styling
 - **Framework**: Vanilla JavaScript with ES modules

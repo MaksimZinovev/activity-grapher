@@ -112,10 +112,6 @@ graph TD
 No build system required. Serve locally:
 ```bash
 live-server --port=8000 --open=form.html --host=localhost
-# or
-python -m http.server 8000
-# or
-npx serve .
 ```
 Open: http://localhost:8000/form.html
 
