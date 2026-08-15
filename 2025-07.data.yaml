@@ -1,6 +1,0 @@
-default:
-  '2025-07-03':
-    - description: "Late-night coding sprint ✨"
-    - description: "Also reviewed 2 PRs"
-  '2025-07-16':
-    - description: "Morning jog 💪"

@@ -1,0 +1,96 @@
+/* ============================================================================
+   tokens.css — Activity Grapher design tokens
+   Source of truth for color, type, spacing, radius, shadow, motion.
+   Light is the default; [data-theme="dark"] overrides.
+   Per-board graph ramps (board-*) are mapped onto --lvl0..--lvl6 at runtime.
+   ========================================================================== */
+
+:root {
+  /* --- neutrals (light) --- */
+  --canvas: #f2f2f0;
+  --surface: #ffffff;
+  --surface-muted: #fafaf9;
+  --surface-sunk: #f4f4f2;
+  --border: #ececea;
+  --border-strong: #e2e2df;
+  --text-primary: #0a0a0a;
+  --text-secondary: #6b6b6b;
+  --text-tertiary: #9a9a95;
+
+  /* --- semantic (light) --- */
+  --active-bg: #e6f4ea;  --active-fg: #1f8a4c;
+  --pending-bg: #fff6d6; --pending-fg: #9a7b12;
+  --feature-bg: #dcebff; --feature-fg: #2f66c9;
+  --danger-bg: #fdecec;  --danger-fg: #c0392b;
+
+  --accent: #2f66c9;
+  --accent-2: #5a8ded;
+
+  /* --- board accent colors (identity) --- */
+  --board-default: #34a853;
+  --board-coding:  #2f66c9;
+  --board-reading: #e8a23a;
+  --board-fitness: #d94a3d;
+
+  /* --- per-board intensity ramps (light) ---
+     6 levels empty→max per board hue. --lvl* are set at runtime from these. */
+  --default-0: #ebedf0; --default-1: #b7e4c7; --default-2: #8fdcb0; --default-3: #5ecf8f; --default-4: #34a853; --default-5: #1f8a4c; --default-6: #156b39;
+  --coding-0:  #e8edf5; --coding-1:  #c4d6f5; --coding-2:  #97b8ed; --coding-3:  #6a99e0; --coding-4:  #2f66c9; --coding-5:  #234f9e; --coding-6:  #17396f;
+  --reading-0: #f6efe2; --reading-1: #f0dca8; --reading-2: #ecc678; --reading-3: #e6ad4d; --reading-4: #e8a23a; --reading-5: #b97e26; --reading-6: #8c5e1b;
+  --fitness-0:  #f6e8e6; --fitness-1:  #f2c4bf; --fitness-2:  #ec9a92; --fitness-3:  #e67368; --fitness-4:  #d94a3d; --fitness-5:  #b1392e; --fitness-6:  #7e2920;
+
+  /* active ramp (mapped at runtime) */
+  --lvl0: var(--default-0); --lvl1: var(--default-1); --lvl2: var(--default-2);
+  --lvl3: var(--default-3); --lvl4: var(--default-4); --lvl5: var(--default-5); --lvl6: var(--default-6);
+
+  /* --- shadow --- */
+  --shadow: 0 1px 2px rgba(10,10,10,.04), 0 1px 1px rgba(10,10,10,.02);
+  --shadow-lg: 0 6px 24px rgba(10,10,10,.08), 0 1px 3px rgba(10,10,10,.05);
+
+  /* --- radius --- */
+  --radius-card: 16px;
+  --radius-tile: 12px;
+  --radius-control: 8px;
+
+  /* --- motion --- */
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  --dur: 170ms;
+
+  /* --- type --- */
+  font-family: Geist, Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "tnum", "lnum";
+}
+
+[data-theme="dark"] {
+  --canvas: #0d0f12;
+  --surface: #15171a;
+  --surface-muted: #1b1e22;
+  --surface-sunk: #121417;
+  --border: #2a2f35;
+  --border-strong: #353a41;
+  --text-primary: #f4f4f4;
+  --text-secondary: #a0a4a8;
+  --text-tertiary: #6b6f73;
+
+  --active-bg: rgba(52,168,83,.16);  --active-fg: #4ade80;
+  --pending-bg: rgba(232,162,58,.16); --pending-fg: #f0c674;
+  --feature-bg: rgba(47,102,201,.18); --feature-fg: #7da7f5;
+  --danger-bg: rgba(217,74,61,.16);  --danger-fg: #f87171;
+
+  --accent: #5a8ded;
+  --accent-2: #7da7f5;
+
+  --board-default: #4ade80;
+  --board-coding:  #7da7f5;
+  --board-reading: #f0c674;
+  --board-fitness: #f87171;
+
+  /* per-board intensity ramps (dark) — darker empties, brighter peaks */
+  --default-0: #1b1e22; --default-1: #0e3b24; --default-2: #155e35; --default-3: #1e7a45; --default-4: #2a9d54; --default-5: #3fbf6a; --default-6: #5ae07f;
+  --coding-0:  #161a22; --coding-1:  #13243f; --coding-2:  #1b3a66; --coding-3:  #245a8f; --coding-4:  #2f66c9; --coding-5:  #5a8ded; --coding-6:  #7da7f5;
+  --reading-0: #1c1814; --reading-1: #3a2a12; --reading-2: #4e3a18; --reading-3: #6a5022; --reading-4: #8a6a2c; --reading-5: #b98a36; --reading-6: #e8a23a;
+  --fitness-0:  #1d1614; --fitness-1:  #3a1a16; --fitness-2:  #50221c; --fitness-3:  #6e2e25; --fitness-4:  #8c392e; --fitness-5:  #b1392e; --fitness-6:  #d94a3d;
+
+  --shadow: 0 1px 2px rgba(0,0,0,.5), 0 1px 1px rgba(0,0,0,.3);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4);
+}

@@ -1,45 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <title>Activity Graph Demo</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <title>Activity Grapher — preview</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@hsablonniere/activity-graph/+esm"></script>
+  <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+  <style>
+    :root {
+      --canvas:#f2f2f0; --surface:#fff; --surface-muted:#fafaf9; --border:#ececea;
+      --text-primary:#0a0a0a; --text-secondary:#6b6b6b; --text-tertiary:#9a9a95;
+      --accent:#2f66c9; --shadow:0 1px 2px rgba(10,10,10,.04),0 1px 1px rgba(10,10,10,.02);
+      --lvl0:#ebedf0; --lvl1:#b7e4c7; --lvl2:#8fdcb0; --lvl3:#5ecf8f; --lvl4:#34a853; --lvl5:#1f8a4c; --lvl6:#156b39;
+      font-family:Geist,Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+      font-feature-settings:"tnum","lnum";
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --canvas:#0d0f12; --surface:#15171a; --surface-muted:#1b1e22; --border:#2a2f35;
+        --text-primary:#f4f4f4; --text-secondary:#a0a4a8; --text-tertiary:#6b6f73;
+        --accent:#5a8ded; --shadow:0 1px 2px rgba(0,0,0,.5);
+        --lvl0:#1b1e22; --lvl1:#0e3b24; --lvl2:#155e35; --lvl3:#1e7a45; --lvl4:#2a9d54; --lvl5:#3fbf6a; --lvl6:#5ae07f;
+      }
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--canvas); color:var(--text-primary); min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:32px 16px; gap:20px; }
+    .head { text-align:center; }
+    .head h1 { margin:0 0 4px; font-size:1.25rem; font-weight:600; }
+    .head p { margin:0; color:var(--text-secondary); font-size:13px; }
+    .head a { color:var(--accent); }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); padding:20px 22px; max-width:100%; overflow-x:auto; }
+    .meta { color:var(--text-secondary); font-size:12px; margin-bottom:12px; display:flex; gap:14px; justify-content:center; }
+    .legend { display:flex; align-items:center; gap:4px; justify-content:center; margin-top:14px; font-size:12px; color:var(--text-secondary); }
+    .legend i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+    activity-graph.ag { --size:14px; display:inline-grid; gap:2px; color:var(--text-secondary); }
+    activity-graph.ag::part(weekday-header), activity-graph.ag::part(month-header) { font-size:11px; color:var(--text-tertiary); }
+    activity-graph.ag::part(weekday-header), activity-graph.ag::part(day) { width:var(--size); height:var(--size); }
+    activity-graph.ag::part(day) { background:var(--lvl0); border-radius:3px; }
+    activity-graph.ag::part(day--data-1) { background:var(--lvl1); }
+    activity-graph.ag::part(day--data-2) { background:var(--lvl2); }
+    activity-graph.ag::part(day--data-3) { background:var(--lvl3); }
+    activity-graph.ag::part(day--data-4) { background:var(--lvl4); }
+    activity-graph.ag::part(day--data-5) { background:var(--lvl5); }
+    activity-graph.ag::part(day--data-6) { background:var(--lvl6); }
+    .note { color:var(--text-tertiary); font-size:12px; }
+  </style>
 </head>
 <body>
-  <h1 style="font-family:Inter,sans-serif;text-align:center;margin-top:2rem">
-    See <a href="form.html">form.html</a> for the interactive editor.<br/>
-    Here is a read-only preview of the current default graph for July 2025:
-  </h1>
-  <activity-graph
-    start-date="2025-07-01" end-date="2025-07-31"
-    week-start-day="1" weekday-headers="short" month-headers="short">
-  </activity-graph>
-  <script type="module">
-    import yaml from 'https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.mjs';
-    import 'https://cdn.jsdelivr.net/npm/@hsablonniere/activity-graph/+esm';
-    const yamlKey='2025-07.data.yaml';
-    const raw=localStorage.getItem(yamlKey)||'{}';
-    const data=yaml.load(raw)||{};
-    const payload={};
-    Object.keys(data).forEach(k=>{
-        if(k.slice(0,7)!=='2025-07') return;
-        const e=data[k]?.default;
-        if(e){
-            payload[k]={
-                title:[e.description].concat(Object.entries(e).filter(([k])=>k!=='description').map(([k,v])=>`${k}:${v}`)).join('\n'),
-                parts:[`level-${Math.min(4,Object.values(e).filter(Boolean).length)||'null'}`]
-            };
+  <div class="head">
+    <h1>Activity Grapher</h1>
+    <p>Read-only preview of the current month's <strong>default</strong> board. <a href="form.html">Open the full editor →</a></p>
+  </div>
+
+  <div class="card">
+    <div class="meta"><span id="monthLabel">—</span><span id="boardLabel">default</span></div>
+    <activity-graph id="graph" class="ag" weekday-headers="short" month-headers="short"></activity-graph>
+    <div class="legend">Less <i style="background:var(--lvl0)"></i><i style="background:var(--lvl2)"></i><i style="background:var(--lvl4)"></i><i style="background:var(--lvl6)"></i> More</div>
+  </div>
+
+  <p class="note" id="note"></p>
+
+  <script>
+    (async () => {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const file = y + '-' + m + '.data.yaml';
+      const first = y + '-' + m + '-01';
+      const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+      const last = y + '-' + m + '-' + String(lastDay).padStart(2, '0');
+
+      const graph = document.getElementById('graph');
+      graph.setAttribute('start-date', first);
+      graph.setAttribute('end-date', last);
+      document.getElementById('monthLabel').textContent = now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+      let payload = {};
+      try {
+        if (navigator.storage && navigator.storage.getDirectory) {
+          const root = await navigator.storage.getDirectory();
+          const dir = await root.getDirectoryHandle('data', { create: false });
+          const handle = await dir.getFileHandle(file);
+          const db = jsyaml.load(await (await handle.getFile()).text()) || {};
+          const bd = db.default || {};
+          for (const date in bd) {
+            const n = bd[date].length;
+            payload[date] = { parts: ['day--data-' + Math.min(n, 6)], title: n + ' activit' + (n === 1 ? 'y' : 'ies') };
+          }
+          document.getElementById('note').textContent = 'Loaded from local File System Access API storage.';
+        } else {
+          document.getElementById('note').textContent = 'File System Access API unavailable — open in a Chromium browser to see live data.';
         }
-    });
-    document.querySelector('activity-graph').data=payload;
+      } catch (e) {
+        document.getElementById('note').textContent = 'No data logged for this month yet.';
+      }
+      try { await customElements.whenDefined('activity-graph'); } catch (e) {}
+      graph.data = payload;
+    })();
   </script>
-  <style>
-    body{background:#fafafa;display:flex;flex-direction:column;align-items:center}
-    activity-graph{--activity-graph-month-gap:.6rem;font-family:Inter,sans-serif;}
-    activity-graph::part(day[level-1]){background:#c6e48b;}
-    activity-graph::part(day[level-2]){background:#7bc96f;}
-    activity-graph::part(day[level-3]){background:#239a3b;}
-    activity-graph::part(day[level-4]){background:#196127;}
-  </style>
 </body>
 </html>

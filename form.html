@@ -1,671 +1,1009 @@
 <!doctype html>
-<html lang="en">
-
+<html lang="en" data-theme="light">
 <head>
-    <meta charset="utf-8" />
-    <title>One-Year Activity Graph – Serializd Theme</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8" />
+  <title>Activity Grapher</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="description" content="Log daily activities and visualize them as a year-long contribution graph." />
+  <!-- web component + YAML parser -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@hsablonniere/activity-graph/+esm"></script>
+  <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+  <style>
+/* ===== tokens ===== */
+/* ============================================================================
+   tokens.css — Activity Grapher design tokens
+   Source of truth for color, type, spacing, radius, shadow, motion.
+   Light is the default; [data-theme="dark"] overrides.
+   Per-board graph ramps (board-*) are mapped onto --lvl0..--lvl6 at runtime.
+   ========================================================================== */
 
-    <!--  Web-component  -->
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@hsablonniere/activity-graph/+esm"></script>
-    <!--  parser  -->
-    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+:root {
+  /* --- neutrals (light) --- */
+  --canvas: #f2f2f0;
+  --surface: #ffffff;
+  --surface-muted: #fafaf9;
+  --surface-sunk: #f4f4f2;
+  --border: #ececea;
+  --border-strong: #e2e2df;
+  --text-primary: #0a0a0a;
+  --text-secondary: #6b6b6b;
+  --text-tertiary: #9a9a95;
 
-    <style>
-        :root {
-            --bg: #101214;
-            --fg: #f4f4f4;
-            --accent: #0d9488;
-        }
+  /* --- semantic (light) --- */
+  --active-bg: #e6f4ea;  --active-fg: #1f8a4c;
+  --pending-bg: #fff6d6; --pending-fg: #9a7b12;
+  --feature-bg: #dcebff; --feature-fg: #2f66c9;
+  --danger-bg: #fdecec;  --danger-fg: #c0392b;
 
-        html,
-        body {
-            height: 100%;
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, system-ui
-        }
+  --accent: #2f66c9;
+  --accent-2: #5a8ded;
 
-        body {
-            background: var(--bg);
-            color: var(--fg);
-            display: flex;
-            flex-direction: column;
-            align-items: center
-        }
+  /* --- board accent colors (identity) --- */
+  --board-default: #34a853;
+  --board-coding:  #2f66c9;
+  --board-reading: #e8a23a;
+  --board-fitness: #d94a3d;
 
-        h1 {
-            margin: .6rem 0;
-            font-size: 1.5rem
-        }
+  /* --- per-board intensity ramps (light) ---
+     6 levels empty→max per board hue. --lvl* are set at runtime from these. */
+  --default-0: #ebedf0; --default-1: #b7e4c7; --default-2: #8fdcb0; --default-3: #5ecf8f; --default-4: #34a853; --default-5: #1f8a4c; --default-6: #156b39;
+  --coding-0:  #e8edf5; --coding-1:  #c4d6f5; --coding-2:  #97b8ed; --coding-3:  #6a99e0; --coding-4:  #2f66c9; --coding-5:  #234f9e; --coding-6:  #17396f;
+  --reading-0: #f6efe2; --reading-1: #f0dca8; --reading-2: #ecc678; --reading-3: #e6ad4d; --reading-4: #e8a23a; --reading-5: #b97e26; --reading-6: #8c5e1b;
+  --fitness-0:  #f6e8e6; --fitness-1:  #f2c4bf; --fitness-2:  #ec9a92; --fitness-3:  #e67368; --fitness-4:  #d94a3d; --fitness-5:  #b1392e; --fitness-6:  #7e2920;
 
-        /* fixed toolbar (always visible) */
-        #toolbar {
-            display: flex;
-            gap: .75rem;
-            align-items: center;
-            margin: .5rem 0 1rem 0;
-        }
+  /* active ramp (mapped at runtime) */
+  --lvl0: var(--default-0); --lvl1: var(--default-1); --lvl2: var(--default-2);
+  --lvl3: var(--default-3); --lvl4: var(--default-4); --lvl5: var(--default-5); --lvl6: var(--default-6);
 
-        button,
-        input,
-        select {
-            padding: .45rem .7rem;
-            background: var(--bg);
-            color: var(--fg);
-            border: 2px solid var(--fg);
-            cursor: pointer;
-            border-radius: 3px
-        }
+  /* --- shadow --- */
+  --shadow: 0 1px 2px rgba(10,10,10,.04), 0 1px 1px rgba(10,10,10,.02);
+  --shadow-lg: 0 6px 24px rgba(10,10,10,.08), 0 1px 3px rgba(10,10,10,.05);
 
-        button:hover {
-            background: var(--accent);
-            color: #000
-        }
+  /* --- radius --- */
+  --radius-card: 16px;
+  --radius-tile: 12px;
+  --radius-control: 8px;
 
-        /* year-graph */
-        #graphWrap {
-            max-width: 88vw;
-            overflow-x: auto;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, .45);
-            border-radius: 6px;
-        }
+  /* --- motion --- */
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  --dur: 170ms;
 
-        /* ---------- SERIALIZD THEME ---------- */
-        activity-graph.serializd {
-            --size: 14px;
-            background: #0d0f12;
-            color: #f4f4f4;
-            display: inline-grid;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial;
-            gap: 1px;
-            padding: 1rem;
-        }
+  /* --- type --- */
+  font-family: Geist, Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "tnum", "lnum";
+}
 
-        activity-graph.serializd::part(weekday-header),
-        activity-graph.serializd::part(month-header) {
-            font-size: 11px
-        }
+[data-theme="dark"] {
+  --canvas: #0d0f12;
+  --surface: #15171a;
+  --surface-muted: #1b1e22;
+  --surface-sunk: #121417;
+  --border: #2a2f35;
+  --border-strong: #353a41;
+  --text-primary: #f4f4f4;
+  --text-secondary: #a0a4a8;
+  --text-tertiary: #6b6f73;
 
-        activity-graph.serializd::part(weekday-header),
-        activity-graph.serializd::part(day) {
-            height: var(--size);
-            line-height: var(--size)
-        }
+  --active-bg: rgba(52,168,83,.16);  --active-fg: #4ade80;
+  --pending-bg: rgba(232,162,58,.16); --pending-fg: #f0c674;
+  --feature-bg: rgba(47,102,201,.18); --feature-fg: #7da7f5;
+  --danger-bg: rgba(217,74,61,.16);  --danger-fg: #f87171;
 
-        activity-graph.serializd::part(day) {
-            width: var(--size);
-            background: #181c20;
-            transition: transform .12s ease, box-shadow .12s ease
-        }
+  --accent: #5a8ded;
+  --accent-2: #7da7f5;
 
-        activity-graph.serializd::part(day):hover {
-            transform: scale(1.25);
-            background: #0d9488;
-            z-index: 2
-        }
+  --board-default: #4ade80;
+  --board-coding:  #7da7f5;
+  --board-reading: #f0c674;
+  --board-fitness: #f87171;
 
-        activity-graph.serializd::part(day selected) {
-            box-shadow: 0 0 6px 2px #0d9488;
-            /* background: inherit;  -- REMOVED THIS LINE */
-            outline: 2px solid #0d9488;
-            border-radius: 2px;
-            z-index: 5;
-        }
+  /* per-board intensity ramps (dark) — darker empties, brighter peaks */
+  --default-0: #1b1e22; --default-1: #0e3b24; --default-2: #155e35; --default-3: #1e7a45; --default-4: #2a9d54; --default-5: #3fbf6a; --default-6: #5ae07f;
+  --coding-0:  #161a22; --coding-1:  #13243f; --coding-2:  #1b3a66; --coding-3:  #245a8f; --coding-4:  #2f66c9; --coding-5:  #5a8ded; --coding-6:  #7da7f5;
+  --reading-0: #1c1814; --reading-1: #3a2a12; --reading-2: #4e3a18; --reading-3: #6a5022; --reading-4: #8a6a2c; --reading-5: #b98a36; --reading-6: #e8a23a;
+  --fitness-0:  #1d1614; --fitness-1:  #3a1a16; --fitness-2:  #50221c; --fitness-3:  #6e2e25; --fitness-4:  #8c392e; --fitness-5:  #b1392e; --fitness-6:  #d94a3d;
 
-        activity-graph.serializd::part(day--data-1) {
-            background: rgba(13, 148, 136, .4)
-        }
+  --shadow: 0 1px 2px rgba(0,0,0,.5), 0 1px 1px rgba(0,0,0,.3);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4);
+}
 
-        activity-graph.serializd::part(day--data-2) {
-            background: rgba(13, 148, 136, .5)
-        }
+/* ===== ui ===== */
+/* ============================================================================
+   ui.css — Activity Grapher components & Layout A shell
+   Requires tokens.css. Product register: restrained, state-rich, familiar.
+   ========================================================================== */
 
-        activity-graph.serializd::part(day--data-3) {
-            background: rgba(13, 148, 136, .6)
-        }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--canvas);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
 
-        activity-graph.serializd::part(day--data-4) {
-            background: rgba(13, 148, 136, .7)
-        }
+/* ---- shell: sidebar + main (Layout A) ---- */
+.shell {
+  min-height: 100vh;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 256px 1fr;
+  gap: 16px;
+}
+.sidebar {
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  height: calc(100vh - 32px);
+  position: sticky;
+  top: 16px;
+}
+.main { overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.sidebar-foot { margin-top: auto; display: grid; gap: 10px; }
 
-        activity-graph.serializd::part(day--data-5) {
-            background: rgba(13, 148, 136, .85)
-        }
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { height: auto; position: static; }
+}
 
-        activity-graph.serializd::part(day--data-6) {
-            background: #0d9488
-        }
+/* ---- surfaces ---- */
+.surface {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow);
+}
 
-        /* side panel (always open) */
-        #sidePanel {
-            margin-top: 1rem;
-            background: #15171a;
-            border: 1px solid #2a2f35;
-            padding: .8rem 1rem;
-            border-radius: 4px;
-            min-width: 22rem;
-            max-width: 88vw
-        }
+/* ---- brand ---- */
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
+.logo {
+  width: 30px; height: 30px; border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff; display: grid; place-items: center;
+  font-size: 16px; font-weight: 700; flex: none;
+}
 
-        label {
-            font-size: .9rem
-        }
+/* ---- group label (eyebrow, used sparingly) ---- */
+.group-label {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--text-tertiary);
+  font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase;
+  margin: 4px 0 8px;
+}
+.group-label .ring {
+  width: 12px; height: 12px;
+  border: 1.5px dashed var(--text-tertiary);
+  border-radius: 999px; flex: none;
+}
 
-        #toast {
-            position: fixed;
-            bottom: 18px;
-            right: 18px;
-            padding: .55rem 1rem;
-            background: #0d9488;
-            color: #000;
-            border-radius: 4px;
-            font-size: .85rem;
-            opacity: 0;
-            transition: opacity .3s
-        }
+/* ---- nav / board list ---- */
+.nav { display: grid; gap: 4px; }
+.nav-item {
+  min-height: 36px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border-radius: var(--radius-control);
+  padding: 8px 10px;
+  color: var(--text-secondary);
+  font-size: 13px; text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.nav-item:hover { background: var(--surface-muted); color: var(--text-primary); }
+.nav-item.active { background: var(--surface-muted); color: var(--text-primary); font-weight: 500; border-color: var(--border); }
+.nav-item:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.nav-item .lead { display: flex; align-items: center; gap: 9px; }
+.nav-item .dot { width: 8px; height: 8px; border-radius: 999px; flex: none; }
+.count {
+  border-radius: 999px; padding: 1px 8px;
+  background: var(--surface-muted); color: var(--text-secondary);
+  font-size: 11px; font-weight: 500;
+  border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
 
-        #toast.show {
-            opacity: 1
-        }
-    </style>
+/* ---- controls (one vocabulary) ---- */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text-primary);
+  font-size: 13px; font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform .12s var(--ease), color var(--dur) var(--ease);
+}
+.btn:hover { background: var(--surface-muted); border-color: var(--text-tertiary); }
+.btn:active { transform: scale(.97); }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
+.btn.ghost:hover { background: var(--surface-muted); color: var(--text-primary); }
+.btn.icon { width: 32px; padding: 0; justify-content: center; }
+.btn.danger { color: var(--danger-fg); }
+.btn.danger:hover { background: var(--danger-bg); border-color: var(--danger-fg); }
+
+.input, .select {
+  height: 34px; padding: 0 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-strong);
+  background: var(--surface); color: var(--text-primary);
+  font-size: 13px; font-family: inherit;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.input:focus, .select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.input::placeholder { color: var(--text-tertiary); }
+.select { cursor: pointer; }
+
+/* ---- theme toggle ---- */
+.theme-toggle { display: inline-flex; align-items: center; gap: 8px; }
+.theme-toggle .seg {
+  display: inline-flex; border: 1px solid var(--border-strong);
+  border-radius: 999px; padding: 2px; background: var(--surface-muted);
+}
+.theme-toggle .seg button {
+  border: none; background: transparent; color: var(--text-secondary);
+  width: 28px; height: 26px; border-radius: 999px; cursor: pointer;
+  display: grid; place-items: center; font-size: 13px;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.theme-toggle .seg button:hover { color: var(--text-primary); }
+.theme-toggle .seg button.on { background: var(--surface); color: var(--text-primary); box-shadow: var(--shadow); }
+.theme-toggle .seg button:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.theme-toggle .label { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+
+/* ---- topbar ---- */
+.topbar {
+  height: 52px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 0 20px;
+}
+.topbar-title { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; min-width: 0; }
+.topbar-title .board-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-title .sub { color: var(--text-secondary); font-weight: 400; white-space: nowrap; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+
+/* ---- content ---- */
+.content { padding: 24px 28px 32px; display: grid; gap: 24px; overflow-y: auto; }
+
+/* ---- page head ---- */
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.page-head h1 {
+  margin: 0; font-size: 1.5rem; font-weight: 600; letter-spacing: -.01em;
+  text-wrap: balance;
+}
+.page-head .meta {
+  color: var(--text-secondary); font-size: 13px;
+  display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 6px;
+}
+.stat-pill { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.stat-pill b { color: var(--text-primary); font-weight: 600; }
+
+/* ---- chips ---- */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 500;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
+}
+.chip.green  { background: var(--active-bg);  color: var(--active-fg);  border-color: transparent; }
+.chip.amber  { background: var(--pending-bg); color: var(--pending-fg); border-color: transparent; }
+.chip.blue   { background: var(--feature-bg); color: var(--feature-fg); border-color: transparent; }
+.chip.red    { background: var(--danger-bg);  color: var(--danger-fg);  border-color: transparent; }
+
+/* ---- graph card ---- */
+.graph-card { padding: 20px 22px 18px; overflow: hidden; }
+.graph-scroll { overflow-x: auto; padding-bottom: 6px; }
+.graph-legend {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 14px; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap;
+}
+.legend-scale { display: inline-flex; align-items: center; gap: 4px; }
+.legend-scale i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+/* graph skeleton (loading state) */
+.graph-skeleton {
+  display: grid; grid-template-rows: repeat(7, 13px); grid-auto-flow: column;
+  gap: 2px; padding: 4px 0; min-height: 120px;
+}
+.graph-skeleton i {
+  width: 13px; height: 13px; border-radius: 3px;
+  background: var(--surface-muted);
+  animation: sk-pulse 1.4s var(--ease) infinite;
+}
+@keyframes sk-pulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+
+/* ---- activity-graph component theming ---- */
+activity-graph.ag {
+  --size: 13px;
+  display: inline-grid;
+  gap: 2px;
+  padding: 4px 0;
+  font-family: inherit;
+  color: var(--text-secondary);
+}
+activity-graph.ag::part(weekday-header),
+activity-graph.ag::part(month-header) { font-size: 11px; color: var(--text-tertiary); }
+activity-graph.ag::part(weekday-header),
+activity-graph.ag::part(day) { width: var(--size); height: var(--size); }
+activity-graph.ag::part(day) {
+  background: var(--lvl0); border-radius: 3px;
+  transition: transform .12s var(--ease), box-shadow .12s var(--ease), outline-color .12s var(--ease);
+  outline: 2px solid transparent; outline-offset: 1px;
+}
+activity-graph.ag::part(day):hover { transform: scale(1.3); z-index: 3; box-shadow: var(--shadow-lg); }
+activity-graph.ag::part(day selected) { outline-color: var(--accent); z-index: 5; }
+activity-graph.ag::part(day--data-1) { background: var(--lvl1); }
+activity-graph.ag::part(day--data-2) { background: var(--lvl2); }
+activity-graph.ag::part(day--data-3) { background: var(--lvl3); }
+activity-graph.ag::part(day--data-4) { background: var(--lvl4); }
+activity-graph.ag::part(day--data-5) { background: var(--lvl5); }
+activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
+
+/* ---- entry panel ---- */
+.panel-card { padding: 20px 22px; display: grid; gap: 14px; }
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.panel-head h2 { margin: 0; font-size: 1.05rem; font-weight: 600; }
+.panel-head .date-chip {
+  font-size: 12px; color: var(--text-secondary);
+  background: var(--surface-muted); border: 1px solid var(--border);
+  border-radius: 999px; padding: 3px 10px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.entry-form { display: flex; gap: 8px; }
+.entry-form .input { flex: 1; min-width: 0; }
+.entry-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.entry-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  background: var(--surface-muted); border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  animation: row-in .18s var(--ease);
+}
+@keyframes row-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.entry-list li .idx {
+  width: 20px; height: 20px; border-radius: 6px;
+  background: var(--active-bg); color: var(--active-fg);
+  display: grid; place-items: center; font-size: 11px; font-weight: 600; flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.entry-list li .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.entry-list li .del {
+  border: none; background: transparent; color: var(--text-tertiary);
+  cursor: pointer; padding: 2px 6px; border-radius: 6px;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.entry-list li .del:hover { color: var(--danger-fg); background: var(--danger-bg); }
+.empty {
+  color: var(--text-tertiary); font-size: 13px;
+  padding: 18px 12px; text-align: center;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-control);
+}
+
+/* ---- toast ---- */
+.toast {
+  position: fixed; bottom: 18px; right: 18px;
+  padding: 9px 14px;
+  background: var(--text-primary); color: var(--canvas);
+  border-radius: 999px;
+  font-size: 13px; font-weight: 500;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .2s var(--ease), transform .2s var(--ease);
+  z-index: 50; box-shadow: var(--shadow-lg); pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.error { background: var(--danger-fg); color: #fff; }
+
+/* ---- storage note ---- */
+.storage-note { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; }
+.storage-note.error { color: var(--danger-fg); }
+
+/* ---- responsive compaction ---- */
+@media (max-width: 600px) {
+  .shell { padding: 10px; }
+  .content { padding: 18px 16px 24px; gap: 18px; }
+  .topbar { padding: 0 14px; }
+  .topbar-title .sub { display: none; }
+  .entry-form { flex-direction: column; }
+  .entry-form .btn { justify-content: center; }
+}
+
+/* ---- reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
+  </style>
 </head>
-
 <body>
-    <h1>2024–2025 yearly tracker</h1>
+  <div class="shell">
+    <!-- SIDEBAR -->
+    <aside class="surface sidebar">
+      <div class="brand"><span class="logo">◆</span> Activity</div>
 
-    <nav id="toolbar">
-        <label for="graphSelect">Graph:</label>
-        <select id="graphSelect">
-            <option value="default">default</option>
+      <div>
+        <div class="group-label"><span class="ring"></span>Boards</div>
+        <nav class="nav" id="boardNav" aria-label="Boards"></nav>
+        <button class="btn ghost" id="renameBtn" style="margin-top:8px;width:100%;justify-content:center;font-size:12px;color:var(--text-secondary)">＋ New / rename board</button>
+      </div>
+
+      <div>
+        <div class="group-label">Year</div>
+        <select class="select" id="yearJump" style="width:100%" aria-label="Year">
+          <option>2026</option><option>2025</option><option>2024</option><option>2023</option>
         </select>
-        <button id="renameBtn" title="Rename graph">✏️</button>
-        <button id="dateSelectBtn" title="Jump to a specific month">📆</button>
-    </nav>
+      </div>
 
-    <div id="graphWrap">
-        <activity-graph id="graph" class="serializd" start-date="2025-01-01" end-date="2025-12-31"
-            weekday-headers="short" month-headers="short" month-limits="early"></activity-graph>
-    </div>
+      <div class="sidebar-foot">
+        <div class="theme-toggle">
+          <span class="label">Theme</span>
+          <span class="seg" role="group" aria-label="Theme">
+            <button data-t="light" title="Light theme">☀</button>
+            <button data-t="dark" title="Dark theme">☾</button>
+          </span>
+        </div>
+        <p class="storage-note" id="storageNote">Data is stored locally in your browser via the File System Access API.</p>
+      </div>
+    </aside>
 
+    <!-- MAIN -->
+    <section class="surface main">
+      <div class="topbar">
+        <div class="topbar-title">
+          <span class="board-name" id="tbBoard">default</span>
+          <span class="sub" id="tbYear">2026 yearly tracker</span>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn icon" id="dateJumpBtn" title="Jump to a date" aria-label="Jump to a date">📆</button>
+          <button class="btn" id="exportBtn">Export YAML</button>
+        </div>
+      </div>
 
-    <section id="sidePanel">
-        <label for="entryInput">What happened on <strong id="panelDay"></strong>?</label>
-        <input id="entryInput" maxlength="128" placeholder="128 chars max…" type="text">
-        <button id="addBtn">add</button>
-        <button id="delBtn" style="display:none">delete all entries</button>
-        <ul id="entryList" style="margin:.5rem 0;padding-left:1.2em;"></ul>
+      <div class="content">
+        <div class="page-head">
+          <div>
+            <h1>Year of activity</h1>
+            <div class="meta">
+              <span class="stat-pill"><b id="statTotal">0</b> entries</span>
+              <span class="stat-pill"><b id="statActive">0</b> active days</span>
+              <span class="chip green" id="boardChip">default</span>
+            </div>
+          </div>
+          <div class="chips">
+            <span class="chip">Mon–Sun</span>
+            <span class="chip">Monthly files</span>
+          </div>
+        </div>
+
+        <div class="surface graph-card">
+          <div class="graph-scroll">
+            <activity-graph id="graph" class="ag" start-date="2026-01-01" end-date="2026-12-31" weekday-headers="short" month-headers="short" month-limits="early"></activity-graph>
+          </div>
+          <div class="graph-legend">
+            <span>Click any day to log an activity</span>
+            <span class="legend-scale" id="legendScale"></span>
+          </div>
+        </div>
+
+        <div class="surface panel-card" id="sidePanel">
+          <div class="panel-head">
+            <h2>What happened on <span id="panelDay">today</span>?</h2>
+            <span class="date-chip" id="dateChip">—</span>
+          </div>
+          <div class="entry-form">
+            <input class="input" id="entryInput" maxlength="128" placeholder="Describe an activity (Enter to add)…" aria-label="Activity description" />
+            <button class="btn primary" id="addBtn">Add activity</button>
+            <button class="btn danger" id="delAll" style="display:none">Clear day</button>
+          </div>
+          <ul class="entry-list" id="entryList"></ul>
+        </div>
+      </div>
     </section>
+  </div>
 
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <div id="toast"></div>
+  <script>
+/* ===== vfs ===== */
+/* ============================================================================
+   vfs.js — File System Access API storage
+   Monthly YAML files (YYYY-MM.data.yaml) under a "data/" directory.
+   Exposes window.VFS with fetch/save/available. js-yaml is loaded globally.
+   ========================================================================== */
 
-    <script>
-        /* ---------- tiny helpers ---------- */
-        const $ = q => document.querySelector(q);
-        const fmt = d => d.toISOString().slice(0, 10);
-        const toast = msg => {
-            const t = $('#toast');
-            t.textContent = msg;
-            t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 2200);
-        };
+(() => {
+  const ROOT_DIR = 'data';
 
-        /* ---------- file API ---------- */
-        class FileSystemVFS {
-            constructor() {
-                this._rootPromise = null;
-                this._initPromise = this._init();
-            }
+  class FileSystemVFS {
+    constructor() {
+      this._ready = null;
+    }
 
-            async _init() {
-                try {
-                    if (!navigator.storage || !navigator.storage.getDirectory) {
-                        throw new Error('File System Access API not supported - use Chrome browser');
-                    }
-                    
-                    const root = await navigator.storage.getDirectory();
-                    this._rootPromise = Promise.resolve(root);
-                    
-                    // Create data directory if it doesn't exist
-                    try {
-                        await root.getDirectoryHandle('data', { create: true });
-                    } catch (e) {
-                        // Directory already exists or create failed
-                        console.log('Data directory setup:', e.message || 'OK');
-                    }
-                    
-                    console.log('File System Access API initialized successfully');
-                } catch (error) {
-                    console.error('Failed to initialize File System Access API:', error);
-                    toast('Storage initialization failed - using Chrome?');
-                    throw error;
-                }
-            }
-
-            async _getRoot() {
-                await this._initPromise;
-                return this._rootPromise;
-            }
-
-            async _readFile(handle) {
-                const file = await handle.getFile();
-                const contents = await file.text();
-                try {
-                    return jsyaml.load(contents) || {};
-                } catch (e) {
-                    console.warn(`Failed to parse YAML file ${handle.name}, using empty object`);
-                    return {};
-                }
-            }
-
-            async _writeFile(handle, data) {
-                const yaml = jsyaml.dump(data, { 
-                    defaultFlowStyle: false,
-                    lineWidth: -1 
-                });
-                const writable = await handle.createWritable();
-                await writable.write(yaml);
-                await writable.close();
-            }
-
-            async fetch(filename) {
-                try {
-                    await this._initPromise;
-                    const root = await this._getRoot();
-                    
-                    // Handle monthly files: YYYY-MM.data.yaml
-                    if (filename.includes('-') && filename.endsWith('.data.yaml')) {
-                        const dataDir = await root.getDirectoryHandle('data', { create: true });
-                        try {
-                            const fileHandle = await dataDir.getFileHandle(filename);
-                            return this._readFile(fileHandle);
-                        } catch (e) {
-                            // File doesn't exist, return empty object
-                            console.log(`File ${filename} not found, returning empty`);
-                            return {};
-                        }
-                    }
-                    
-                    // Handle yearly files (for backward compatibility during migration)
-                    if (filename.endsWith('.data.yaml')) {
-                        try {
-                            const fileHandle = await root.getFileHandle(filename);
-                            return this._readFile(fileHandle);
-                        } catch (e) {
-                            console.log(`Yearly file ${filename} not found, returning empty`);
-                            return {};
-                        }
-                    }
-                    
-                    return {};
-                } catch (error) {
-                    console.error(`Error fetching ${filename}:`, error);
-                    return {};
-                }
-            }
-
-            async save(filename, data) {
-                try {
-                    await this._initPromise;
-                    const root = await this._getRoot();
-                    
-                    // Handle monthly files: YYYY-MM.data.yaml
-                    if (filename.includes('-') && filename.endsWith('.data.yaml')) {
-                        const dataDir = await root.getDirectoryHandle('data', { create: true });
-                        const fileHandle = await dataDir.getFileHandle(filename, { create: true });
-                        await this._writeFile(fileHandle, data);
-                        console.log(`Saved monthly file: ${filename}`);
-                        return;
-                    }
-                    
-                    // Handle yearly files (for backward compatibility)
-                    if (filename.endsWith('.data.yaml')) {
-                        const fileHandle = await root.getFileHandle(filename, { create: true });
-                        await this._writeFile(fileHandle, data);
-                        console.log(`Saved yearly file: ${filename}`);
-                        return;
-                    }
-                    
-                    throw new Error(`Unsupported file type: ${filename}`);
-                } catch (error) {
-                    console.error(`Error saving ${filename}:`, error);
-                    toast(`Failed to save ${filename}`);
-                    throw error;
-                }
-            }
-        }
-        const fs = new FileSystemVFS();
-
-        let curBoard = 'default';
-        let curSelected = fmt(new Date());
-        let graph = $('#graph'); // Get graph element reference once
-
-        /* ---------- year render ---------- */
-        async function renderYear() {
-            const ymFile = curSelected.slice(0, 7) + '.data.yaml';
-            let db = await fs.fetch(ymFile);
-            const boardObj = db[curBoard] || {};
-            const data = {};
-            for (const date in boardObj) {
-                const n = boardObj[date].length;
-                data[date] = {
-                    parts: ['day--data-' + Math.min(n, 6)],
-                    title: `${n} item${n !== 1 ? 's' : ''}`
-                }
-            }
-            console.log("Data for graph:", data);
-            graph.data = data;
-
-            // highlight selected
-            // This logic should ideally be handled within the graph component itself on data updates
-            // or ensure the `selected` attribute correctly reflects `curSelected`.
-            // For now, keep it, but be aware it's a manual override.
-            graph.shadowRoot?.querySelector(`[data-date="${curSelected}"]`)?.setAttribute('part', 'day selected');
-        }
-
-        /* ---------- panel interactions ---------- */
-        let prevSelectedCell = null; // Stays global for highlight management
-
-        graph.addEventListener('click', e => {
-            // Use composedPath() to get the actual element clicked, even within Shadow DOM
-            const clickedElement = e.composedPath()[0];
-
-            // Check if the clicked element has the data-date attribute
-            if (!clickedElement?.dataset?.date) {
-                console.log("Clicked but not a day cell (via composedPath)");
-                return; // Not a day cell, exit
-            }
-
-            const newSelectedDate = clickedElement.dataset.date;
-
-            // Remove highlight from previous cell if it exists and is different from the new one
-            if (prevSelectedCell && prevSelectedCell !== clickedElement) {
-                // Remove 'selected' part, restoring its original parts (including data-level)
-                const currentParts = prevSelectedCell.getAttribute('part');
-                const partsArray = currentParts ? currentParts.split(' ').filter(p => p !== 'selected').join(' ') : '';
-                prevSelectedCell.setAttribute('part', partsArray);
-                console.log(`Removed highlight from previous cell: ${prevSelectedCell.dataset.date}. New parts: '${partsArray}'`);
-            }
-
-            curSelected = newSelectedDate;
-            console.log("Updating curSelected to:", curSelected);
-            showPanel(curSelected);
-
-            // Store the newly selected cell for future clicks
-            prevSelectedCell = clickedElement;
-
-            // Explicitly set the 'selected' part on the clicked cell
-            // This ensures the visual highlight and _adds_ 'selected' to any existing parts
-            const currentParts = clickedElement.getAttribute('part');
-            const partsToAdd = currentParts ? `${currentParts} selected` : 'day selected'; // Ensure 'day' part is always present
-            console.log(`Highlighting clicked cell: ${clickedElement.dataset.date}. Setting parts to: '${partsToAdd}'`);
-            clickedElement.setAttribute('part', partsToAdd);
-        });
-
-
-        function showPanel(date) {
-            $('#panelDay').textContent = date;
-            $('#sidePanel').style.display = 'block';
-            refreshPanel(date);
-        }
-
-        async function refreshPanel(date) {
-            const ymFile = date.slice(0, 7) + '.data.yaml';
-            const db = await fs.fetch(ymFile);
-            const list = (db[curBoard] || {})[date] || [];
-            $('#entryList').innerHTML = list.map((e, i) => `<li>${e.description}</li>`).join('');
-            // FIX: corrected the display value
-            $('#delBtn').style.display = list.length ? 'inline-block' : 'none';
-        }
-
-        /* ---------- form events ---------- */
-        $('#addBtn').onclick = async () => {
-            const txt = $('#entryInput').value.trim();
-            if (!txt || txt.length > 128) { toast('invalid'); return; }
-
-            const ymFile = curSelected.slice(0, 7) + '.data.yaml';
-            let db = await fs.fetch(ymFile);
-            db[curBoard] = db[curBoard] || {};
-            db[curBoard][curSelected] = db[curBoard][curSelected] || [];
-            db[curBoard][curSelected].push({ description: txt });
-            await fs.save(ymFile, db);
-            $('#entryInput').value = '';
-            refreshPanel(curSelected);
-            renderYear(); // Re-render year graph to update activity intensity
-            toast('added');
-        };
-
-        $('#delBtn').onclick = async () => {
-            const ymFile = curSelected.slice(0, 7) + '.data.yaml';
-            let db = await fs.fetch(ymFile);
-            if (db[curBoard]) delete db[curBoard][curSelected];
-            await fs.save(ymFile, db);
-            refreshPanel(curSelected);
-            renderYear(); // Re-render year graph to update activity intensity
-            toast('deleted');
-        };
-
-        // Corrected placement for rename and graph select handlers
-        $('#renameBtn').addEventListener('click', async () => {
-            const newName = prompt('New graph name:', curBoard);
-            if (!newName || newName === curBoard) return;
-            const ymFile = curSelected.slice(0, 7) + '.data.yaml';
-            let db = await fs.fetch(ymFile);
-
-            db[newName] = db[curBoard] || {}; // Copy data from old board to new
-            delete db[curBoard]; // Delete old board
-            await fs.save(ymFile, db);
-
-            curBoard = newName;
-            refreshBoards(); // Update dropdown
-            renderYear(); // Re-render graph
-            toast('renamed');
-        });
-
-        $('#graphSelect').addEventListener('change', e => {
-            curBoard = e.target.value;
-            renderYear(); // Re-render graph for new board
-            showPanel(curSelected); // Re-render panel for new board's data
-        });
-
-        // Input limit validation
-        const entryInput = $('#entryInput');
-        entryInput.addEventListener('input', () => {
-            const bad = entryInput.value.length > 128;
-            // You had $('#valMsg') but no such element in HTML. Let's assume you'd show this visually
-            // For now, let's just use console.log or remove if not needed.
-            // If you want a visual message, add <div id="valMsg" style="color:red; display:none;">Too long!</div>
-            // below your input field.
-            // For demonstration, commenting out:
-            // $('#valMsg').style.visibility = bad ? 'visible' : 'hidden';
-        });
-
-
-        /* --------------- boards selector --------------- */
-        async function refreshBoards() {
-            const graphSelect = $('#graphSelect'); // Get graphSelect element reference
-
-            try {
-                // Fetch all unique board names from all year/month files in storage
-                const currentYear = new Date().getFullYear();
-                const allBoards = new Set();
-                
-                // Check for existing files by trying to fetch monthly patterns
-                const filePatterns = [
-                    // Check recent months
-                    ...Array.from({length: 24}, (_, i) => {
-                        const date = new Date(currentYear, i, 1);
-                        const year = date.getFullYear();
-                        const month = String(date.getMonth() + 1).padStart(2, '0');
-                        return `${year}-${month}.data.yaml`;
-                    })
-                ];
-
-                // Try to fetch each file and collect board names
-                for (const filename of filePatterns) {
-                    try {
-                        const fileData = await fs.fetch(filename);
-                        Object.keys(fileData).forEach(boardName => allBoards.add(boardName));
-                    } catch (e) {
-                        // File doesn't exist or can't be read, skip
-                        continue;
-                    }
-                }
-
-                graphSelect.innerHTML = ''; // Clear existing options
-                const boardList = Array.from(allBoards);
-                
-                // Always ensure 'default' exists
-                if (!boardList.includes('default')) {
-                    boardList.unshift('default');
-                }
-
-                boardList.forEach(boardName => {
-                    graphSelect.add(new Option(boardName, boardName));
-                });
-
-                // Select the current board
-                const currentOption = [...graphSelect.options].find(o => o.value === curBoard);
-                if (currentOption) {
-                    currentOption.selected = true;
-                } else if (graphSelect.options.length > 0) {
-                    // If current board not found, select the first available
-                    curBoard = graphSelect.options[0].value;
-                    graphSelect.options[0].selected = true;
-                } else {
-                    // Fallback: ensure at least 'default' exists
-                    graphSelect.add(new Option('default', 'default'));
-                    curBoard = 'default';
-                    graphSelect.options[0].selected = true;
-                }
-            } catch (error) {
-                console.error('Error refreshing boards:', error);
-                // Fallback: create at least the default option
-                graphSelect.innerHTML = '';
-                graphSelect.add(new Option('default', 'default'));
-                curBoard = 'default';
-                graphSelect.options[0].selected = true;
-            }
-        }
-
-
-
-        /* --------------- debug helpers --------------- */
-        async function debugFileSystem() {
-            try {
-                const root = await fs._getRoot();
-                
-                console.log('=== File System Debug ===');
-                console.log('Root directory accessible:', !!root);
-                
-                const files = [];
-                
-                // Check root directory for yearly files
-                try {
-                    console.log('Checking root directory for monthly files...');
-                    const rootEntries = await root.values();
-                    for await (const entry of rootEntries) {
-                        if (entry.name.endsWith('.data.yaml') && entry.name.includes('-')) {
-                            files.push(`root/${entry.name}`);
-                            const data = await fs.fetch(entry.name);
-                            console.log(`File: root/${entry.name}`, data);
-                        }
-                    }
-                } catch (e) {
-                    console.log('Root directory access error:', e.message);
-                }
-                
-                // Check data directory for monthly files
-                try {
-                    console.log('Checking data directory for monthly files...');
-                    const dataDir = await root.getDirectoryHandle('data');
-                    console.log('Data directory accessible:', !!dataDir);
-                    
-                    const dataEntries = await dataDir.values();
-                    for await (const entry of dataEntries) {
-                        if (entry.name.endsWith('.data.yaml')) {
-                            files.push(`data/${entry.name}`);
-                            const data = await fs.fetch(entry.name);
-                            console.log(`File: data/${entry.name}`, data);
-                        }
-                    }
-                } catch (e) {
-                    console.log('Data directory access error (may not exist yet):', e.message);
-                }
-                
-                console.log('Total found files:', files.length, files);
-                
-                // Also test common file patterns
-                console.log('Testing common file access...');
-                const testFiles = ['2025-07.data.yaml', '2025-08.data.yaml', '2025-06.data.yaml'];
-                for (const filename of testFiles) {
-                    try {
-                        const data = await fs.fetch(filename);
-                        const keys = Object.keys(data);
-                        if (keys.length > 0) {
-                            console.log(`Access test PASSED for ${filename}:`, keys);
-                        }
-                    } catch (e) {
-                        console.log(`Access test FAILED for ${filename}:`, e.message);
-                    }
-                }
-                
-            } catch (error) {
-                console.error('Debug failed:', error);
-            }
-        }
-
-        // Add debug button to toolbar
-        setTimeout(() => {
-            const debugBtn = document.createElement('button');
-            debugBtn.textContent = '🔍';
-            debugBtn.title = 'Debug filesystem';
-            debugBtn.onclick = debugFileSystem;
-            document.getElementById('toolbar').appendChild(debugBtn);
-        }, 1000);
-
-        /* --------------- bootstrap --------------- */
-        (async () => {
-            const today = fmt(new Date());
-            curSelected = today; // Initialize curSelected
-            const ymFile = curSelected.slice(0, 7) + '.data.yaml';
-
-            // create monthly file if missing for the current month
-            if (!await fs.fetch(ymFile)) {
-                await fs.save(ymFile, { default: {} });
-            }
-
-            await refreshBoards(); // Populate graph selection dropdown
-            showPanel(curSelected); // Display side panel for today
-            renderYear(); // Render the graph for the current year and board
-
-            // Highlight the initially selected day after graph has rendered
-            // Using a short timeout to ensure shadow DOM is fully ready can sometimes help,
-            // but direct access after await should be sufficient.
-            const initialSelectedCell = graph.shadowRoot?.querySelector(`[data-date="${curSelected}"]`);
-            if (initialSelectedCell) {
-                initialSelectedCell.setAttribute('part', 'day selected');
-                prevSelectedCell = initialSelectedCell; // Initialize prevSelectedCell
-            }
+    /** Lazily resolve the root directory handle. */
+    async _root() {
+      if (!this._ready) {
+        this._ready = (async () => {
+          if (!navigator.storage || !navigator.storage.getDirectory) {
+            throw new Error('File System Access API not supported. Use a Chromium-based browser.');
+          }
+          const root = await navigator.storage.getDirectory();
+          await root.getDirectoryHandle(ROOT_DIR, { create: true });
+          return root;
         })();
-    </script>
+      }
+      return this._ready;
+    }
 
-    <!-- ========== tool tips for everybody ========== -->
-    <script>(() => { /* naive tooltip strategy */
-            document.addEventListener('mouseover', e => {
-                const tip = e.target.getAttribute('title');
-                if (!tip) return;
-                const span = document.createElement('span');
-                span.className = 'toolTip';
-                span.textContent = tip;
-                span.style.position = 'absolute'; span.style.bottom = '2px'; span.style.left = '5px';
-                span.style.fontSize = '0.7rem'; span.style.background = '#000'; span.style.color = '#fff'; span.style.padding = '2px 5px'; span.style.borderRadius = '3px'; span.style.zIndex = 99;
-                e.target.append(span);
-            }, { once: false, capture: false });
-            document.addEventListener('mouseout', e => document.querySelectorAll('.toolTip').forEach(t => t.remove()));
-        })();
-    </script>
+    async _readFile(handle) {
+      const file = await handle.getFile();
+      const text = await file.text();
+      try {
+        return jsyaml.load(text) || {};
+      } catch (e) {
+        console.warn('VFS: failed to parse ' + handle.name + ', treating as empty', e);
+        return {};
+      }
+    }
 
+    async _writeFile(handle, data) {
+      const yaml = jsyaml.dump(data, { defaultFlowStyle: false, lineWidth: -1 });
+      const writable = await handle.createWritable();
+      await writable.write(yaml);
+      await writable.close();
+    }
+
+    /** Fetch a monthly file (YYYY-MM.data.yaml) → object (empty {} if missing). */
+    async fetch(filename) {
+      try {
+        const root = await this._root();
+        const dir = await root.getDirectoryHandle(ROOT_DIR, { create: true });
+        const handle = await dir.getFileHandle(filename);
+        return this._readFile(handle);
+      } catch (e) {
+        if (e && e.name === 'NotFoundError') return {};
+        console.warn('VFS: fetch ' + filename + ' failed', e);
+        return {};
+      }
+    }
+
+    /** Save an object to a monthly file. */
+    async save(filename, data) {
+      const root = await this._root();
+      const dir = await root.getDirectoryHandle(ROOT_DIR, { create: true });
+      const handle = await dir.getFileHandle(filename, { create: true });
+      await this._writeFile(handle, data);
+    }
+
+    /** Supported & permission ok? */
+    async available() {
+      try {
+        await this._root();
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+  }
+
+  window.VFS = new FileSystemVFS();
+})();
+  </script>
+  <script>
+/* ===== app ===== */
+/* ============================================================================
+   app.js — Activity Grapher application logic (Layout A)
+   Depends on: window.VFS (vfs.js), js-yaml, @hsablonniere/activity-graph.
+   No optional chaining (tree-sitter grammar limitation); equivalent checks.
+   ========================================================================== */
+
+(() => {
+  const $ = (q, r) => (r || document).querySelector(q);
+  const $$ = (q, r) => Array.prototype.slice.call((r || document).querySelectorAll(q));
+ const fmt = (d) =>
+    d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+  const ymFile = (date) => date.slice(0, 7) + '.data.yaml';
+
+  // board accent token + ramp prefix
+  const BOARD_COLORS = {
+    default: 'var(--board-default)',
+    coding:  'var(--board-coding)',
+    reading: 'var(--board-reading)',
+    fitness: 'var(--board-fitness)',
+  };
+
+  let curBoard = 'default';
+  let curYear = new Date().getFullYear();
+  let curSelected = fmt(new Date());
+  let graph, prevCell, ready;
+
+  /* ---------- helpers ---------- */
+  function toast(msg, kind) {
+    const t = $('#toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.toggle('error', kind === 'error');
+    t.classList.add('show');
+    clearTimeout(t._t);
+    t._t = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+ // known boards own a ramp + chip class; unknown boards fall back to default
+  const KNOWN_BOARDS = ['default', 'coding', 'reading', 'fitness'];
+  const BOARD_CHIP = { default: 'green', coding: 'blue', reading: 'amber', fitness: 'red' };
+  const rampPrefix = (b) => (KNOWN_BOARDS.indexOf(b) !== -1 ? b : 'default');
+
+  /** Map the active board's ramp onto --lvl0..--lvl6 on the graph element. */
+  function applyBoardRamp() {
+    if (!graph) return;
+    const p = rampPrefix(curBoard);
+    for (let i = 0; i <= 6; i++) {
+      graph.style.setProperty('--lvl' + i, 'var(--' + p + '-' + i + ')');
+    }
+    // legend swatches follow the active board's ramp (DOM-built, no innerHTML)
+    const legend = $('#legendScale');
+    if (legend) {
+      legend.replaceChildren(document.createTextNode('Less '));
+      [0, 2, 4, 6].forEach((l) => {
+        const sw = document.createElement('i');
+        sw.style.background = 'var(--lvl' + l + ')';
+        legend.appendChild(sw);
+      });
+      legend.appendChild(document.createTextNode(' More'));
+    }
+  }
+
+  /* ---------- boards ---------- */
+  async function refreshBoards() {
+    // gather board names across all months of the current year
+    const names = new Set(['default']);
+    for (let m = 0; m < 12; m++) {
+      const f = curYear + '-' + String(m + 1).padStart(2, '0') + '.data.yaml';
+      const db = await VFS.fetch(f);
+      for (const k in db) names.add(k);
+    }
+    const list = Array.from(names);
+    const nav = $('#boardNav');
+    nav.replaceChildren();
+    list.forEach((b) => {
+      const a = document.createElement('a');
+      a.className = 'nav-item' + (b === curBoard ? ' active' : '');
+      a.setAttribute('data-board', b);
+      a.setAttribute('tabindex', '0');
+      a.setAttribute('role', 'button');
+      const lead = document.createElement('span');
+      lead.className = 'lead';
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = BOARD_COLORS[b] || BOARD_COLORS.default;
+      lead.appendChild(dot);
+      lead.appendChild(document.createTextNode(b));
+      a.appendChild(lead);
+      const select = () => { curBoard = b; onBoardChange(); };
+      a.addEventListener('click', select);
+      a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } });
+      nav.appendChild(a);
+    });
+    syncTopbar();
+  }
+
+  async function onBoardChange() {
+    applyBoardRamp();
+    await refreshBoards();
+    await renderGraph();
+    await renderPanel();
+  }
+
+  function syncTopbar() {
+    const nm = $('#tbBoard');
+    if (nm) nm.textContent = curBoard;
+    const sub = $('#tbYear');
+    if (sub) sub.textContent = curYear + ' yearly tracker';
+    const yj = $('#yearJump');
+    if (yj) yj.value = String(curYear);
+    // board identity chip: retint to the board's color
+    const chip = $('#boardChip');
+    if (chip) {
+      chip.textContent = curBoard;
+      chip.className = 'chip ' + (BOARD_CHIP[curBoard] || 'green');
+    }
+  }
+
+  /* ---------- graph ---------- */
+  async function renderGraph() {
+    if (!graph || !ready) return;
+    // load all months of the current year, merge
+    const merged = {};
+    let total = 0, active = 0;
+    for (let m = 0; m < 12; m++) {
+      const f = curYear + '-' + String(m + 1).padStart(2, '0') + '.data.yaml';
+      const db = await VFS.fetch(f);
+      const bd = db[curBoard] || {};
+      for (const date in bd) {
+        merged[date] = { parts: ['day--data-' + Math.min(bd[date].length, 6)], title: bd[date].length + ' activit' + (bd[date].length === 1 ? 'y' : 'ies') };
+        total += bd[date].length;
+        active++;
+      }
+    }
+    graph.data = merged;
+    $('#statTotal').textContent = total;
+    $('#statActive').textContent = active;
+    requestAnimationFrame(highlightSelected);
+  }
+
+  function highlightSelected() {
+    if (prevCell) {
+      const p = prevCell.getAttribute('part') || '';
+      prevCell.setAttribute('part', p.split(' ').filter((x) => x !== 'selected').join(' '));
+    }
+    const sr = graph && graph.shadowRoot;
+    const cell = sr ? sr.querySelector('[data-date="' + curSelected + '"]') : null;
+    if (cell) {
+      const p = cell.getAttribute('part') || 'day';
+      cell.setAttribute('part', p + ' selected');
+      prevCell = cell;
+    }
+  }
+
+  /* ---------- panel ---------- */
+  async function renderPanel() {
+    const day = $('#panelDay');
+    const chip = $('#dateChip');
+    const d = new Date(curSelected + 'T00:00:00');
+    if (day) day.textContent = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    if (chip) chip.textContent = curSelected;
+
+    const db = await VFS.fetch(ymFile(curSelected));
+    const list = (db[curBoard] || {})[curSelected] || [];
+    const ul = $('#entryList');
+    ul.replaceChildren();
+    if (list.length) {
+      list.forEach((e, i) => {
+        const li = document.createElement('li');
+        const idx = document.createElement('span');
+        idx.className = 'idx';
+        idx.textContent = String(i + 1);
+        const txt = document.createElement('span');
+        txt.className = 'txt';
+        txt.textContent = e.description;
+        const del = document.createElement('button');
+        del.className = 'del';
+        del.title = 'Delete entry';
+        del.setAttribute('aria-label', 'Delete entry');
+        del.textContent = '✕';
+        del.addEventListener('click', () => deleteEntry(i));
+        li.appendChild(idx);
+        li.appendChild(txt);
+        li.appendChild(del);
+        ul.appendChild(li);
+      });
+    } else {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'No activities logged for this day yet. Type above to add one.';
+      ul.appendChild(li);
+    }
+    const delAll = $('#delAll');
+    if (delAll) delAll.style.display = list.length ? '' : 'none';
+  }
+
+  async function addEntry() {
+    const input = $('#entryInput');
+    const txt = input.value.trim();
+    if (!txt) { toast('Type an activity first', 'error'); input.focus(); return; }
+    if (txt.length > 128) { toast('Keep it under 128 characters', 'error'); return; }
+    const f = ymFile(curSelected);
+    const db = await VFS.fetch(f);
+    db[curBoard] = db[curBoard] || {};
+    db[curBoard][curSelected] = db[curBoard][curSelected] || [];
+    db[curBoard][curSelected].push({ description: txt });
+    try {
+      await VFS.save(f, db);
+    } catch (e) {
+      toast('Could not save', 'error'); return;
+    }
+    input.value = '';
+    await renderPanel();
+    await renderGraph();
+    toast('Activity added');
+  }
+
+  async function deleteEntry(i) {
+    const f = ymFile(curSelected);
+    const db = await VFS.fetch(f);
+    const arr = (db[curBoard] || {})[curSelected] || [];
+    arr.splice(i, 1);
+    if (arr.length === 0) delete db[curBoard][curSelected];
+    try {
+      await VFS.save(f, db);
+    } catch (e) {
+      toast('Could not save', 'error'); return;
+    }
+    await renderPanel();
+    await renderGraph();
+    toast('Entry deleted');
+  }
+
+  async function clearDay() {
+    const f = ymFile(curSelected);
+    const db = await VFS.fetch(f);
+    if (db[curBoard]) delete db[curBoard][curSelected];
+    try {
+      await VFS.save(f, db);
+    } catch (e) {
+      toast('Could not save', 'error'); return;
+    }
+    await renderPanel();
+    await renderGraph();
+    toast('Day cleared');
+  }
+
+  /* ---------- export ---------- */
+  async function exportYAML() {
+    // export the whole current year for the current board
+    const out = {};
+    out[curBoard] = {};
+    for (let m = 0; m < 12; m++) {
+      const f = curYear + '-' + String(m + 1).padStart(2, '0') + '.data.yaml';
+      const db = await VFS.fetch(f);
+      const bd = db[curBoard] || {};
+      for (const date in bd) out[curBoard][date] = bd[date];
+    }
+    const yaml = jsyaml.dump(out, { defaultFlowStyle: false, lineWidth: -1 });
+    const blob = new Blob([yaml], { type: 'text/yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = curBoard + '-' + curYear + '.data.yaml';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast('Exported ' + curBoard + ' ' + curYear);
+  }
+
+  /* ---------- rename / new board ---------- */
+  async function renameBoard() {
+    const n = prompt('New board name (or type a new one to create):', curBoard);
+    if (!n || n === curBoard) return;
+    if (!/^[a-z0-9 _-]{1,32}$/i.test(n)) { toast('Use letters, numbers, spaces, - or _', 'error'); return; }
+    // migrate across the year
+    for (let m = 0; m < 12; m++) {
+      const f = curYear + '-' + String(m + 1).padStart(2, '0') + '.data.yaml';
+      const db = await VFS.fetch(f);
+      if (db[curBoard]) {
+        db[n] = db[curBoard];
+        delete db[curBoard];
+        await VFS.save(f, db);
+      }
+    }
+    curBoard = n;
+    await onBoardChange();
+    toast('Board renamed');
+  }
+
+  /* ---------- year jumper ---------- */
+  async function jumpYear(year) {
+    curYear = year;
+    // clamp selected date into the chosen year (same month/day if valid, else Jan 1)
+    const d = new Date(curSelected + 'T00:00:00');
+    d.setFullYear(year);
+    const cand = fmt(d);
+    curSelected = cand;
+    syncTopbar();
+    await refreshBoards();
+    await renderGraph();
+    await renderPanel();
+  }
+
+  /* ---------- theme ---------- */
+  function initTheme() {
+    const set = (t) => {
+      document.documentElement.setAttribute('data-theme', t);
+      $$('.theme-toggle .seg button').forEach((b) =>
+        b.classList.toggle('on', b.getAttribute('data-t') === t));
+      try { localStorage.setItem('ag-theme', t); } catch (e) {}
+    };
+    let initial = 'light';
+    try {
+      const saved = localStorage.getItem('ag-theme');
+      initial = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    } catch (e) {}
+    set(initial);
+    $$('.theme-toggle .seg button').forEach((b) =>
+      b.addEventListener('click', () => set(b.getAttribute('data-t'))));
+  }
+
+  /* ---------- wiring ---------- */
+  function wireGraph() {
+    graph = $('#graph');
+    if (!graph) return;
+    graph.addEventListener('click', (e) => {
+      const el = e.composedPath()[0];
+      if (!el || !el.dataset || !el.dataset.date) return;
+      curSelected = el.dataset.date;
+      highlightSelected();
+      renderPanel();
+    });
+  }
+
+  function wireForm() {
+    $('#addBtn').addEventListener('click', addEntry);
+    $('#entryInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addEntry(); });
+    $('#delAll').addEventListener('click', clearDay);
+    $('#renameBtn').addEventListener('click', renameBoard);
+    $('#exportBtn').addEventListener('click', exportYAML);
+    $('#yearJump').addEventListener('change', (e) => {
+      const y = parseInt(e.target.value, 10);
+      if (!isNaN(y)) jumpYear(y);
+    });
+    $('#dateJumpBtn').addEventListener('click', () => {
+      const d = prompt('Jump to a date (YYYY-MM-DD):', curSelected);
+      if (!d) return;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { toast('Use YYYY-MM-DD', 'error'); return; }
+      const dt = new Date(d + 'T00:00:00');
+      if (isNaN(dt)) { toast('Invalid date', 'error'); return; }
+      curYear = dt.getFullYear();
+      curSelected = d;
+      syncTopbar();
+      refreshBoards().then(renderGraph).then(renderPanel);
+    });
+  }
+
+  /* ---------- storage note ---------- */
+  async function checkStorage() {
+    const ok = await VFS.available();
+    const note = $('#storageNote');
+    if (!note) return;
+    if (!ok) {
+      note.classList.add('error');
+      note.textContent = 'Storage unavailable — use a Chromium browser and grant access. Changes won’t be saved.';
+    } else {
+      note.classList.remove('error');
+      note.textContent = 'Data is stored locally in your browser via the File System Access API.';
+    }
+  }
+
+  /* ---------- bootstrap ---------- */
+  async function boot() {
+    initTheme();
+    wireForm();
+    graph = $('#graph');
+    graph.setAttribute('start-date', curYear + '-01-01');
+    graph.setAttribute('end-date', curYear + '-12-31');
+    syncTopbar();
+    applyBoardRamp();
+    await checkStorage();
+    try { await customElements.whenDefined('activity-graph'); } catch (e) {}
+    ready = true;
+    wireGraph();
+    // ensure current month file exists
+    try {
+      const f = ymFile(curSelected);
+      const db = await VFS.fetch(f);
+      if (!db[curBoard]) { db[curBoard] = {}; await VFS.save(f, db); }
+    } catch (e) {}
+    await refreshBoards();
+    await renderGraph();
+    await renderPanel();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();
+  </script>
 </body>
-
 </html>
