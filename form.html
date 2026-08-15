@@ -337,7 +337,7 @@ activity-graph.ag::part(weekday-header),
 activity-graph.ag::part(day) { width: var(--size); height: var(--size); }
 activity-graph.ag::part(day) {
   background: var(--lvl0); border-radius: 3px;
-  transition: transform .12s var(--ease), box-shadow .12s var(--ease), outline-color .12s var(--ease);
+  transition: transform .12s var(--ease), box-shadow .12s var(--ease), outline-color .12s var(--ease), background var(--dur) var(--ease);
   outline: 2px solid transparent; outline-offset: 1px;
 }
 activity-graph.ag::part(day):hover { transform: scale(1.3); z-index: 3; box-shadow: var(--shadow-lg); }
@@ -416,6 +416,13 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
   .topbar-title .sub { display: none; }
   .entry-form { flex-direction: column; }
   .entry-form .btn { justify-content: center; }
+}
+
+/* ---- theme transition (toggle only — class is added by JS on user click, never on load) ---- */
+.theme-anim *,
+.theme-anim *::before,
+.theme-anim *::after {
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease) !important;
 }
 
 /* ---- reduced motion ---- */
@@ -627,6 +634,24 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
   let curSelected = fmt(new Date());
   let graph, prevCell, ready;
 
+  const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const EASE = 'cubic-bezier(.22,1,.36,1)';
+
+  /** Animate a tabular number from its current value to `to`. Snaps under reduced motion. */
+  function countUp(el, to, dur) {
+    if (!el) return;
+    const from = parseInt(el.textContent, 10) || 0;
+    if (from === to || reduceMotion()) { el.textContent = String(to); return; }
+    const start = performance.now();
+    const tick = (now) => {
+      const p = Math.min((now - start) / dur, 1);
+      const e = 1 - (1 - p) ** 3;
+      el.textContent = String(Math.round(from + (to - from) * e));
+      if (p < 1) requestAnimationFrame(tick); else el.textContent = String(to);
+    };
+    requestAnimationFrame(tick);
+  }
+
   /* ---------- helpers ---------- */
   function toast(msg, kind) {
     const t = $('#toast');
@@ -700,7 +725,7 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
   async function onBoardChange() {
     applyBoardRamp();
     await refreshBoards();
-    await renderGraph();
+    await renderGraph(true);
     await renderPanel();
   }
 
@@ -720,7 +745,7 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
   }
 
   /* ---------- graph ---------- */
-  async function renderGraph() {
+  async function renderGraph(animate) {
     if (!graph || !ready) return;
     // load all months of the current year, merge
     const merged = {};
@@ -736,8 +761,13 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
       }
     }
     graph.data = merged;
-    $('#statTotal').textContent = total;
-    $('#statActive').textContent = active;
+    if (animate && !reduceMotion()) {
+      countUp($('#statTotal'), total, 240);
+      countUp($('#statActive'), active, 240);
+    } else {
+      $('#statTotal').textContent = String(total);
+      $('#statActive').textContent = String(active);
+    }
     requestAnimationFrame(highlightSelected);
   }
 
@@ -790,7 +820,7 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
     } else {
       const li = document.createElement('li');
       li.className = 'empty';
-      li.textContent = 'No activities logged for this day yet. Type above to add one.';
+      li.textContent = 'Nothing logged for ' + d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) + ' yet. Add the first activity above.';
       ul.appendChild(li);
     }
     const delAll = $('#delAll');
@@ -809,16 +839,40 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
     db[curBoard][curSelected].push({ description: txt });
     try {
       await VFS.save(f, db);
-    } catch (e) {
+    } catch {
       toast('Could not save', 'error'); return;
     }
     input.value = '';
     await renderPanel();
     await renderGraph();
+    // quiet acknowledgement: the day that just received an activity settles
+    requestAnimationFrame(() => {
+      highlightSelected();
+      requestAnimationFrame(() => {
+        const cell = prevCell;
+        if (cell && !reduceMotion()) {
+          cell.animate(
+            [{ transform: 'scale(1)' }, { transform: 'scale(1.16)' }, { transform: 'scale(1)' }],
+            { duration: 260, easing: EASE }
+          );
+        }
+      });
+    });
     toast('Activity added');
   }
 
   async function deleteEntry(i) {
+    const ul = $('#entryList');
+    const li = ul.children[i];
+    if (li && !reduceMotion()) {
+      try {
+        await li.animate(
+          [{ opacity: 1, transform: 'translateX(0) scale(1)' },
+           { opacity: 0, transform: 'translateX(10px) scale(.96)' }],
+          { duration: 150, easing: EASE, fill: 'forwards' }
+        ).finished;
+      } catch {}
+    }
     const f = ymFile(curSelected);
     const db = await VFS.fetch(f);
     const arr = (db[curBoard] || {})[curSelected] || [];
@@ -826,7 +880,7 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
     if (arr.length === 0) delete db[curBoard][curSelected];
     try {
       await VFS.save(f, db);
-    } catch (e) {
+    } catch {
       toast('Could not save', 'error'); return;
     }
     await renderPanel();
@@ -835,12 +889,22 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
   }
 
   async function clearDay() {
+    const ul = $('#entryList');
+    if (ul.children.length && !reduceMotion()) {
+      const anims = $$('#entryList li').map((row) =>
+        row.animate(
+          [{ opacity: 1, transform: 'translateX(0)' },
+           { opacity: 0, transform: 'translateX(10px)' }],
+          { duration: 140, easing: EASE, fill: 'forwards' }
+        ).finished);
+      try { await Promise.all(anims); } catch {}
+    }
     const f = ymFile(curSelected);
     const db = await VFS.fetch(f);
     if (db[curBoard]) delete db[curBoard][curSelected];
     try {
       await VFS.save(f, db);
-    } catch (e) {
+    } catch {
       toast('Could not save', 'error'); return;
     }
     await renderPanel();
@@ -902,7 +966,7 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
     curSelected = cand;
     syncTopbar();
     await refreshBoards();
-    await renderGraph();
+    await renderGraph(true);
     await renderPanel();
   }
 
@@ -910,18 +974,27 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
   function initTheme() {
     const set = (t) => {
       document.documentElement.setAttribute('data-theme', t);
-      $$('.theme-toggle .seg button').forEach((b) =>
-        b.classList.toggle('on', b.getAttribute('data-t') === t));
-      try { localStorage.setItem('ag-theme', t); } catch (e) {}
+      $$('.theme-toggle .seg button').forEach((b) => {
+        b.classList.toggle('on', b.getAttribute('data-t') === t);
+      });
+      try { localStorage.setItem('ag-theme', t); } catch {}
     };
     let initial = 'light';
     try {
       const saved = localStorage.getItem('ag-theme');
       initial = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    } catch (e) {}
+    } catch {}
     set(initial);
-    $$('.theme-toggle .seg button').forEach((b) =>
-      b.addEventListener('click', () => set(b.getAttribute('data-t'))));
+    $$('.theme-toggle .seg button').forEach((b) => {
+      b.addEventListener('click', () => {
+        if (!reduceMotion()) {
+          const r = document.documentElement;
+          r.classList.add('theme-anim');
+          setTimeout(() => r.classList.remove('theme-anim'), 260);
+        }
+        set(b.getAttribute('data-t'));
+      });
+    });
   }
 
   /* ---------- wiring ---------- */
@@ -984,7 +1057,7 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
     syncTopbar();
     applyBoardRamp();
     await checkStorage();
-    try { await customElements.whenDefined('activity-graph'); } catch (e) {}
+    try { await customElements.whenDefined('activity-graph'); } catch {}
     ready = true;
     wireGraph();
     // ensure current month file exists
@@ -992,7 +1065,7 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
       const f = ymFile(curSelected);
       const db = await VFS.fetch(f);
       if (!db[curBoard]) { db[curBoard] = {}; await VFS.save(f, db); }
-    } catch (e) {}
+    } catch {}
     await refreshBoards();
     await renderGraph();
     await renderPanel();

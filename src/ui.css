@@ -226,7 +226,7 @@ activity-graph.ag::part(weekday-header),
 activity-graph.ag::part(day) { width: var(--size); height: var(--size); }
 activity-graph.ag::part(day) {
   background: var(--lvl0); border-radius: 3px;
-  transition: transform .12s var(--ease), box-shadow .12s var(--ease), outline-color .12s var(--ease);
+  transition: transform .12s var(--ease), box-shadow .12s var(--ease), outline-color .12s var(--ease), background var(--dur) var(--ease);
   outline: 2px solid transparent; outline-offset: 1px;
 }
 activity-graph.ag::part(day):hover { transform: scale(1.3); z-index: 3; box-shadow: var(--shadow-lg); }
@@ -305,6 +305,13 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
   .topbar-title .sub { display: none; }
   .entry-form { flex-direction: column; }
   .entry-form .btn { justify-content: center; }
+}
+
+/* ---- theme transition (toggle only — class is added by JS on user click, never on load) ---- */
+.theme-anim *,
+.theme-anim *::before,
+.theme-anim *::after {
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease) !important;
 }
 
 /* ---- reduced motion ---- */

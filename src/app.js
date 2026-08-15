@@ -26,6 +26,24 @@
   let curSelected = fmt(new Date());
   let graph, prevCell, ready;
 
+  const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const EASE = 'cubic-bezier(.22,1,.36,1)';
+
+  /** Animate a tabular number from its current value to `to`. Snaps under reduced motion. */
+  function countUp(el, to, dur) {
+    if (!el) return;
+    const from = parseInt(el.textContent, 10) || 0;
+    if (from === to || reduceMotion()) { el.textContent = String(to); return; }
+    const start = performance.now();
+    const tick = (now) => {
+      const p = Math.min((now - start) / dur, 1);
+      const e = 1 - (1 - p) ** 3;
+      el.textContent = String(Math.round(from + (to - from) * e));
+      if (p < 1) requestAnimationFrame(tick); else el.textContent = String(to);
+    };
+    requestAnimationFrame(tick);
+  }
+
   /* ---------- helpers ---------- */
   function toast(msg, kind) {
     const t = $('#toast');
@@ -99,7 +117,7 @@
   async function onBoardChange() {
     applyBoardRamp();
     await refreshBoards();
-    await renderGraph();
+    await renderGraph(true);
     await renderPanel();
   }
 
@@ -119,7 +137,7 @@
   }
 
   /* ---------- graph ---------- */
-  async function renderGraph() {
+  async function renderGraph(animate) {
     if (!graph || !ready) return;
     // load all months of the current year, merge
     const merged = {};
@@ -135,8 +153,13 @@
       }
     }
     graph.data = merged;
-    $('#statTotal').textContent = total;
-    $('#statActive').textContent = active;
+    if (animate && !reduceMotion()) {
+      countUp($('#statTotal'), total, 240);
+      countUp($('#statActive'), active, 240);
+    } else {
+      $('#statTotal').textContent = String(total);
+      $('#statActive').textContent = String(active);
+    }
     requestAnimationFrame(highlightSelected);
   }
 
@@ -189,7 +212,7 @@
     } else {
       const li = document.createElement('li');
       li.className = 'empty';
-      li.textContent = 'No activities logged for this day yet. Type above to add one.';
+      li.textContent = 'Nothing logged for ' + d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) + ' yet. Add the first activity above.';
       ul.appendChild(li);
     }
     const delAll = $('#delAll');
@@ -208,16 +231,40 @@
     db[curBoard][curSelected].push({ description: txt });
     try {
       await VFS.save(f, db);
-    } catch (e) {
+    } catch {
       toast('Could not save', 'error'); return;
     }
     input.value = '';
     await renderPanel();
     await renderGraph();
+    // quiet acknowledgement: the day that just received an activity settles
+    requestAnimationFrame(() => {
+      highlightSelected();
+      requestAnimationFrame(() => {
+        const cell = prevCell;
+        if (cell && !reduceMotion()) {
+          cell.animate(
+            [{ transform: 'scale(1)' }, { transform: 'scale(1.16)' }, { transform: 'scale(1)' }],
+            { duration: 260, easing: EASE }
+          );
+        }
+      });
+    });
     toast('Activity added');
   }
 
   async function deleteEntry(i) {
+    const ul = $('#entryList');
+    const li = ul.children[i];
+    if (li && !reduceMotion()) {
+      try {
+        await li.animate(
+          [{ opacity: 1, transform: 'translateX(0) scale(1)' },
+           { opacity: 0, transform: 'translateX(10px) scale(.96)' }],
+          { duration: 150, easing: EASE, fill: 'forwards' }
+        ).finished;
+      } catch {}
+    }
     const f = ymFile(curSelected);
     const db = await VFS.fetch(f);
     const arr = (db[curBoard] || {})[curSelected] || [];
@@ -225,7 +272,7 @@
     if (arr.length === 0) delete db[curBoard][curSelected];
     try {
       await VFS.save(f, db);
-    } catch (e) {
+    } catch {
       toast('Could not save', 'error'); return;
     }
     await renderPanel();
@@ -234,12 +281,22 @@
   }
 
   async function clearDay() {
+    const ul = $('#entryList');
+    if (ul.children.length && !reduceMotion()) {
+      const anims = $$('#entryList li').map((row) =>
+        row.animate(
+          [{ opacity: 1, transform: 'translateX(0)' },
+           { opacity: 0, transform: 'translateX(10px)' }],
+          { duration: 140, easing: EASE, fill: 'forwards' }
+        ).finished);
+      try { await Promise.all(anims); } catch {}
+    }
     const f = ymFile(curSelected);
     const db = await VFS.fetch(f);
     if (db[curBoard]) delete db[curBoard][curSelected];
     try {
       await VFS.save(f, db);
-    } catch (e) {
+    } catch {
       toast('Could not save', 'error'); return;
     }
     await renderPanel();
@@ -301,7 +358,7 @@
     curSelected = cand;
     syncTopbar();
     await refreshBoards();
-    await renderGraph();
+    await renderGraph(true);
     await renderPanel();
   }
 
@@ -309,18 +366,27 @@
   function initTheme() {
     const set = (t) => {
       document.documentElement.setAttribute('data-theme', t);
-      $$('.theme-toggle .seg button').forEach((b) =>
-        b.classList.toggle('on', b.getAttribute('data-t') === t));
-      try { localStorage.setItem('ag-theme', t); } catch (e) {}
+      $$('.theme-toggle .seg button').forEach((b) => {
+        b.classList.toggle('on', b.getAttribute('data-t') === t);
+      });
+      try { localStorage.setItem('ag-theme', t); } catch {}
     };
     let initial = 'light';
     try {
       const saved = localStorage.getItem('ag-theme');
       initial = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    } catch (e) {}
+    } catch {}
     set(initial);
-    $$('.theme-toggle .seg button').forEach((b) =>
-      b.addEventListener('click', () => set(b.getAttribute('data-t'))));
+    $$('.theme-toggle .seg button').forEach((b) => {
+      b.addEventListener('click', () => {
+        if (!reduceMotion()) {
+          const r = document.documentElement;
+          r.classList.add('theme-anim');
+          setTimeout(() => r.classList.remove('theme-anim'), 260);
+        }
+        set(b.getAttribute('data-t'));
+      });
+    });
   }
 
   /* ---------- wiring ---------- */
@@ -383,7 +449,7 @@
     syncTopbar();
     applyBoardRamp();
     await checkStorage();
-    try { await customElements.whenDefined('activity-graph'); } catch (e) {}
+    try { await customElements.whenDefined('activity-graph'); } catch {}
     ready = true;
     wireGraph();
     // ensure current month file exists
@@ -391,7 +457,7 @@
       const f = ymFile(curSelected);
       const db = await VFS.fetch(f);
       if (!db[curBoard]) { db[curBoard] = {}; await VFS.save(f, db); }
-    } catch (e) {}
+    } catch {}
     await refreshBoards();
     await renderGraph();
     await renderPanel();
