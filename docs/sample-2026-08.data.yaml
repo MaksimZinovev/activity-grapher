@@ -1,0 +1,24 @@
+# Sample monthly data file — shows the YAML shape the app reads/writes.
+# The app stores real data in your browser via the File System Access API
+# (OPFS data/ directory), not in the repo. This file is for documentation.
+#
+# Structure: { <board>: { "YYYY-MM-DD": [ { description: "..." } ] } }
+# Intensity level = min(entries.length, 6); the graph ramp retints per board.
+
+default:
+  "2026-08-03":
+    - description: "Shipped the auth refactor"
+    - description: "Reviewed two PRs"
+  "2026-08-10":
+    - description: "Long walk + podcast"
+  "2026-08-15":
+    - description: "Deep work block, no meetings"
+    - description: "Read 30 pages"
+    - description: "Gym: push day"
+
+coding:
+  "2026-08-04":
+    - description: "Pair-programmed on the cache layer"
+  "2026-08-11":
+    - description: "Debugged the race condition"
+    - description: "Wrote design doc draft"
