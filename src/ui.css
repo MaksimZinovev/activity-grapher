@@ -244,6 +244,11 @@ activity-graph.ag::part(day--data-3) { background: var(--lvl3); }
 activity-graph.ag::part(day--data-4) { background: var(--lvl4); }
 activity-graph.ag::part(day--data-5) { background: var(--lvl5); }
 activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
+activity-graph.ag::part(day--todos) {
+  background: repeating-linear-gradient(45deg,
+    var(--lvl0), var(--lvl0) 3px,
+    var(--text-tertiary) 3px, var(--text-tertiary) 4px);
+}
 
 /* ---- entry panel ---- */
 .panel-card { padding: 20px 22px; display: grid; gap: 14px; }
@@ -280,6 +285,15 @@ activity-graph.ag::part(day--data-6) { background: var(--lvl6); }
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .entry-list li .del:hover { color: var(--danger-fg); background: var(--danger-bg); }
+.entry-list li .cb {
+  width: 16px; height: 16px; flex: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.entry-list li.done .txt {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
 .empty {
   color: var(--text-tertiary); font-size: 13px;
   padding: 18px 12px; text-align: center;

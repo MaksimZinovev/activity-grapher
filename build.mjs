@@ -85,7 +85,7 @@ ${ui}
           <div>
             <h1>Year of activity</h1>
             <div class="meta">
-              <span class="stat-pill"><b id="statTotal">0</b> entries</span>
+              <span class="stat-pill"><b id="statTotal">0</b> completed</span>
               <span class="stat-pill"><b id="statActive">0</b> active days</span>
               <span class="chip green" id="boardChip">default</span>
             </div>

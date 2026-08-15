@@ -10,6 +10,9 @@
   const fmt = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const ymFile = (date) => date.slice(0, 7) + '.data.yaml';
 
+  // missing or true → done; only explicit false → open (migration: old entries default done)
+  const isDone = (e) => e.done !== false;
+
   // board accent token + ramp prefix
   const BOARD_COLORS = {
     default: 'var(--board-default)',
@@ -78,6 +81,12 @@
         legend.appendChild(sw);
       });
       legend.appendChild(document.createTextNode(' More'));
+      // 'Open' legend swatch for days with uncompleted todos
+      const openSw = document.createElement('i');
+      openSw.style.background = 'repeating-linear-gradient(45deg, var(--lvl0), var(--lvl0) 2px, var(--text-tertiary) 2px, var(--text-tertiary) 3px)';
+      openSw.style.marginLeft = '12px';
+      legend.appendChild(openSw);
+      legend.appendChild(document.createTextNode(' Open'));
     }
   }
 
@@ -157,9 +166,14 @@
       const db = await VFS.fetch(f);
       const bd = db[curBoard] || {};
       for (const date in bd) {
-        merged[date] = { parts: ['day--data-' + Math.min(bd[date].length, 6)], title: bd[date].length + ' activit' + (bd[date].length === 1 ? 'y' : 'ies') };
-        total += bd[date].length;
-        active++;
+        const done = bd[date].filter(isDone).length;
+        if (done) {
+          merged[date] = { parts: ['day--data-' + Math.min(done, 6)], title: done + ' of ' + bd[date].length + ' completed' };
+          total += done;
+          active++;
+        } else if (bd[date].length) {
+          merged[date] = { parts: ['day--todos'], title: '0 of ' + bd[date].length + ' completed' };
+        }
       }
     }
     graph.data = merged;
@@ -208,6 +222,15 @@
     if (list.length) {
       list.forEach((e, i) => {
         const li = document.createElement('li');
+        if (isDone(e)) li.classList.add('done');
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'cb';
+        cb.checked = isDone(e);
+        cb.setAttribute('aria-label', 'Mark complete');
+        cb.addEventListener('change', () => toggleDone(i));
+
         const idx = document.createElement('span');
         idx.className = 'idx';
         idx.textContent = String(i + 1);
@@ -220,6 +243,7 @@
         del.setAttribute('aria-label', 'Delete entry');
         del.textContent = '✕';
         del.addEventListener('click', () => deleteEntry(i));
+        li.appendChild(cb);
         li.appendChild(idx);
         li.appendChild(txt);
         li.appendChild(del);
@@ -233,6 +257,31 @@
     }
     const delAll = $('#delAll');
     if (delAll) delAll.style.display = list.length ? '' : 'none';
+  }
+
+  async function toggleDone(i) {
+    const f = ymFile(curSelected);
+    const db = await VFS.fetch(f);
+    const arr = (db[curBoard] || {})[curSelected] || [];
+    if (!arr[i]) return;
+    arr[i].done = !isDone(arr[i]);
+    try {
+      await VFS.save(f, db);
+    } catch {
+      toast('Could not save', 'error');
+      return;
+    }
+    await renderPanel();
+    await renderGraph();
+    requestAnimationFrame(() => {
+      highlightSelected();
+      requestAnimationFrame(() => {
+        const cell = prevCell;
+        if (cell && !reduceMotion()) {
+          cell.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.16)' }, { transform: 'scale(1)' }], { duration: 260, easing: EASE });
+        }
+      });
+    });
   }
 
   async function addEntry() {
@@ -251,7 +300,7 @@
     const db = await VFS.fetch(f);
     db[curBoard] = db[curBoard] || {};
     db[curBoard][curSelected] = db[curBoard][curSelected] || [];
-    db[curBoard][curSelected].push({ description: txt });
+    db[curBoard][curSelected].push({ description: txt, done: false });
     try {
       await VFS.save(f, db);
     } catch {
