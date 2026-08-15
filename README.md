@@ -1,5 +1,6 @@
 # Activity Grapher
 
+![mockup](assets/mockup-light.png)
 Log daily activities and visualize them as a year-long GitHub-style contribution graph. Client-side only, single self-contained HTML file. Data stays in your browser.
 
 ## Run
@@ -18,7 +19,7 @@ A Chromium-based browser is required (File System Access API).
 - **Storage**: File System Access API, monthly `YYYY-MM.data.yaml` files under an OPFS `data/` directory. Serialized with `js-yaml`.
 - **Boards**: parallel activity streams (default, coding, reading, fitness, or your own). Each board owns a color; the graph ramp retints to the active board.
 - **Themes**: light + dark, toggle persisted, respects `prefers-color-scheme`.
-
+![mockup](assets/mockup-dark-2.png)
 ## Project layout
 
 ```

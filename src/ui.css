@@ -222,7 +222,14 @@ activity-graph.ag {
 }
 activity-graph.ag::part(weekday-header),
 activity-graph.ag::part(month-header) { font-size: 11px; color: var(--text-tertiary); }
-activity-graph.ag::part(weekday-header),
+activity-graph.ag::part(weekday-header) { 
+  width: auto; 
+  height: var(--size);
+  line-height: var(--size);
+  text-align: left;
+  padding-right: 10px;
+}
+activity-graph.ag::part(month-header) { padding-bottom: 10px; }
 activity-graph.ag::part(day) { width: var(--size); height: var(--size); }
 activity-graph.ag::part(day) {
   background: var(--lvl0); border-radius: 3px;

@@ -7,16 +7,13 @@
 (() => {
   const $ = (q, r) => (r || document).querySelector(q);
   const $$ = (q, r) => Array.prototype.slice.call((r || document).querySelectorAll(q));
- const fmt = (d) =>
-    d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0') + '-' +
-    String(d.getDate()).padStart(2, '0');
+  const fmt = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const ymFile = (date) => date.slice(0, 7) + '.data.yaml';
 
   // board accent token + ramp prefix
   const BOARD_COLORS = {
     default: 'var(--board-default)',
-    coding:  'var(--board-coding)',
+    coding: 'var(--board-coding)',
     reading: 'var(--board-reading)',
     fitness: 'var(--board-fitness)',
   };
@@ -33,13 +30,17 @@
   function countUp(el, to, dur) {
     if (!el) return;
     const from = parseInt(el.textContent, 10) || 0;
-    if (from === to || reduceMotion()) { el.textContent = String(to); return; }
+    if (from === to || reduceMotion()) {
+      el.textContent = String(to);
+      return;
+    }
     const start = performance.now();
     const tick = (now) => {
       const p = Math.min((now - start) / dur, 1);
       const e = 1 - (1 - p) ** 3;
       el.textContent = String(Math.round(from + (to - from) * e));
-      if (p < 1) requestAnimationFrame(tick); else el.textContent = String(to);
+      if (p < 1) requestAnimationFrame(tick);
+      else el.textContent = String(to);
     };
     requestAnimationFrame(tick);
   }
@@ -55,7 +56,7 @@
     t._t = setTimeout(() => t.classList.remove('show'), 2200);
   }
 
- // known boards own a ramp + chip class; unknown boards fall back to default
+  // known boards own a ramp + chip class; unknown boards fall back to default
   const KNOWN_BOARDS = ['default', 'coding', 'reading', 'fitness'];
   const BOARD_CHIP = { default: 'green', coding: 'blue', reading: 'amber', fitness: 'red' };
   const rampPrefix = (b) => (KNOWN_BOARDS.indexOf(b) !== -1 ? b : 'default');
@@ -106,9 +107,17 @@
       lead.appendChild(dot);
       lead.appendChild(document.createTextNode(b));
       a.appendChild(lead);
-      const select = () => { curBoard = b; onBoardChange(); };
+      const select = () => {
+        curBoard = b;
+        onBoardChange();
+      };
       a.addEventListener('click', select);
-      a.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } });
+      a.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          select();
+        }
+      });
       nav.appendChild(a);
     });
     syncTopbar();
@@ -141,7 +150,8 @@
     if (!graph || !ready) return;
     // load all months of the current year, merge
     const merged = {};
-    let total = 0, active = 0;
+    let total = 0,
+      active = 0;
     for (let m = 0; m < 12; m++) {
       const f = curYear + '-' + String(m + 1).padStart(2, '0') + '.data.yaml';
       const db = await VFS.fetch(f);
@@ -166,7 +176,13 @@
   function highlightSelected() {
     if (prevCell) {
       const p = prevCell.getAttribute('part') || '';
-      prevCell.setAttribute('part', p.split(' ').filter((x) => x !== 'selected').join(' '));
+      prevCell.setAttribute(
+        'part',
+        p
+          .split(' ')
+          .filter((x) => x !== 'selected')
+          .join(' '),
+      );
     }
     const sr = graph && graph.shadowRoot;
     const cell = sr ? sr.querySelector('[data-date="' + curSelected + '"]') : null;
@@ -222,8 +238,15 @@
   async function addEntry() {
     const input = $('#entryInput');
     const txt = input.value.trim();
-    if (!txt) { toast('Type an activity first', 'error'); input.focus(); return; }
-    if (txt.length > 128) { toast('Keep it under 128 characters', 'error'); return; }
+    if (!txt) {
+      toast('Type an activity first', 'error');
+      input.focus();
+      return;
+    }
+    if (txt.length > 128) {
+      toast('Keep it under 128 characters', 'error');
+      return;
+    }
     const f = ymFile(curSelected);
     const db = await VFS.fetch(f);
     db[curBoard] = db[curBoard] || {};
@@ -232,7 +255,8 @@
     try {
       await VFS.save(f, db);
     } catch {
-      toast('Could not save', 'error'); return;
+      toast('Could not save', 'error');
+      return;
     }
     input.value = '';
     await renderPanel();
@@ -243,10 +267,7 @@
       requestAnimationFrame(() => {
         const cell = prevCell;
         if (cell && !reduceMotion()) {
-          cell.animate(
-            [{ transform: 'scale(1)' }, { transform: 'scale(1.16)' }, { transform: 'scale(1)' }],
-            { duration: 260, easing: EASE }
-          );
+          cell.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.16)' }, { transform: 'scale(1)' }], { duration: 260, easing: EASE });
         }
       });
     });
@@ -259,9 +280,11 @@
     if (li && !reduceMotion()) {
       try {
         await li.animate(
-          [{ opacity: 1, transform: 'translateX(0) scale(1)' },
-           { opacity: 0, transform: 'translateX(10px) scale(.96)' }],
-          { duration: 150, easing: EASE, fill: 'forwards' }
+          [
+            { opacity: 1, transform: 'translateX(0) scale(1)' },
+            { opacity: 0, transform: 'translateX(10px) scale(.96)' },
+          ],
+          { duration: 150, easing: EASE, fill: 'forwards' },
         ).finished;
       } catch {}
     }
@@ -273,7 +296,8 @@
     try {
       await VFS.save(f, db);
     } catch {
-      toast('Could not save', 'error'); return;
+      toast('Could not save', 'error');
+      return;
     }
     await renderPanel();
     await renderGraph();
@@ -283,13 +307,19 @@
   async function clearDay() {
     const ul = $('#entryList');
     if (ul.children.length && !reduceMotion()) {
-      const anims = $$('#entryList li').map((row) =>
-        row.animate(
-          [{ opacity: 1, transform: 'translateX(0)' },
-           { opacity: 0, transform: 'translateX(10px)' }],
-          { duration: 140, easing: EASE, fill: 'forwards' }
-        ).finished);
-      try { await Promise.all(anims); } catch {}
+      const anims = $$('#entryList li').map(
+        (row) =>
+          row.animate(
+            [
+              { opacity: 1, transform: 'translateX(0)' },
+              { opacity: 0, transform: 'translateX(10px)' },
+            ],
+            { duration: 140, easing: EASE, fill: 'forwards' },
+          ).finished,
+      );
+      try {
+        await Promise.all(anims);
+      } catch {}
     }
     const f = ymFile(curSelected);
     const db = await VFS.fetch(f);
@@ -297,7 +327,8 @@
     try {
       await VFS.save(f, db);
     } catch {
-      toast('Could not save', 'error'); return;
+      toast('Could not save', 'error');
+      return;
     }
     await renderPanel();
     await renderGraph();
@@ -332,7 +363,10 @@
   async function renameBoard() {
     const n = prompt('New board name (or type a new one to create):', curBoard);
     if (!n || n === curBoard) return;
-    if (!/^[a-z0-9 _-]{1,32}$/i.test(n)) { toast('Use letters, numbers, spaces, - or _', 'error'); return; }
+    if (!/^[a-z0-9 _-]{1,32}$/i.test(n)) {
+      toast('Use letters, numbers, spaces, - or _', 'error');
+      return;
+    }
     // migrate across the year
     for (let m = 0; m < 12; m++) {
       const f = curYear + '-' + String(m + 1).padStart(2, '0') + '.data.yaml';
@@ -369,7 +403,9 @@
       $$('.theme-toggle .seg button').forEach((b) => {
         b.classList.toggle('on', b.getAttribute('data-t') === t);
       });
-      try { localStorage.setItem('ag-theme', t); } catch {}
+      try {
+        localStorage.setItem('ag-theme', t);
+      } catch {}
     };
     let initial = 'light';
     try {
@@ -404,7 +440,9 @@
 
   function wireForm() {
     $('#addBtn').addEventListener('click', addEntry);
-    $('#entryInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addEntry(); });
+    $('#entryInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addEntry();
+    });
     $('#delAll').addEventListener('click', clearDay);
     $('#renameBtn').addEventListener('click', renameBoard);
     $('#exportBtn').addEventListener('click', exportYAML);
@@ -415,9 +453,15 @@
     $('#dateJumpBtn').addEventListener('click', () => {
       const d = prompt('Jump to a date (YYYY-MM-DD):', curSelected);
       if (!d) return;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { toast('Use YYYY-MM-DD', 'error'); return; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        toast('Use YYYY-MM-DD', 'error');
+        return;
+      }
       const dt = new Date(d + 'T00:00:00');
-      if (isNaN(dt)) { toast('Invalid date', 'error'); return; }
+      if (isNaN(dt)) {
+        toast('Invalid date', 'error');
+        return;
+      }
       curYear = dt.getFullYear();
       curSelected = d;
       syncTopbar();
@@ -449,14 +493,19 @@
     syncTopbar();
     applyBoardRamp();
     await checkStorage();
-    try { await customElements.whenDefined('activity-graph'); } catch {}
+    try {
+      await customElements.whenDefined('activity-graph');
+    } catch {}
     ready = true;
     wireGraph();
     // ensure current month file exists
     try {
       const f = ymFile(curSelected);
       const db = await VFS.fetch(f);
-      if (!db[curBoard]) { db[curBoard] = {}; await VFS.save(f, db); }
+      if (!db[curBoard]) {
+        db[curBoard] = {};
+        await VFS.save(f, db);
+      }
     } catch {}
     await refreshBoards();
     await renderGraph();
