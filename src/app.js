@@ -408,9 +408,26 @@
     toast('Exported ' + curBoard + ' ' + curYear);
   }
 
-  /* ---------- rename / new board ---------- */
+  /* ---------- new board ---------- */
+  async function newBoard() {
+    const n = prompt('New board name:', '');
+    if (!n) return;
+    if (!/^[a-z0-9 _-]{1,32}$/i.test(n)) {
+      toast('Use letters, numbers, spaces, - or _', 'error');
+      return;
+    }
+    const f = curSelected.substring(0, 7) + '.data.yaml';
+    const db = await VFS.fetch(f);
+    if (!db[n]) db[n] = {};
+    await VFS.save(f, db);
+    curBoard = n;
+    await onBoardChange();
+    toast('Board created');
+  }
+
+  /* ---------- rename board ---------- */
   async function renameBoard() {
-    const n = prompt('New board name (or type a new one to create):', curBoard);
+    const n = prompt('Rename current board to:', curBoard);
     if (!n || n === curBoard) return;
     if (!/^[a-z0-9 _-]{1,32}$/i.test(n)) {
       toast('Use letters, numbers, spaces, - or _', 'error');
@@ -494,6 +511,7 @@
     });
     $('#delAll').addEventListener('click', clearDay);
     $('#renameBtn').addEventListener('click', renameBoard);
+    $('#newBoardBtn').addEventListener('click', newBoard);
     $('#exportBtn').addEventListener('click', exportYAML);
     const pickBtn = $('#pickFolderBtn');
     if (pickBtn) pickBtn.addEventListener('click', pickFolder);

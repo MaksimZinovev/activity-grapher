@@ -45,7 +45,10 @@ ${ui}
       <div>
         <div class="group-label"><span class="ring"></span>Boards</div>
         <nav class="nav" id="boardNav" aria-label="Boards"></nav>
-        <button class="btn ghost" id="renameBtn" style="margin-top:8px;width:100%;justify-content:center;font-size:12px;color:var(--text-secondary)">＋ New / rename board</button>
+        <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn ghost" id="newBoardBtn" style="flex:1;justify-content:center;font-size:12px;color:var(--text-secondary)">＋ New board</button>
+        <button class="btn ghost" id="renameBtn" style="flex:1;justify-content:center;font-size:12px;color:var(--text-secondary)">✎ Rename</button>
+        </div>
       </div>
 
       <div>

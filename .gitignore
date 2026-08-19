@@ -24,6 +24,7 @@ node_modules/
 # Local tooling state (per-machine, not project code)
 .ck/
 .pi/
+.specstory/
 
 # Local data, scratch / experiments
 scratchpad/
