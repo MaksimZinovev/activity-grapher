@@ -64,6 +64,7 @@ ${ui}
           </span>
         </div>
         <p class="storage-note" id="storageNote">Data is stored locally in your browser via the File System Access API.</p>
+        <button class="btn ghost" id="pickFolderBtn" style="display:none;margin-top:8px;width:100%;justify-content:center;font-size:12px;color:var(--text-secondary)">Choose data folder</button>
       </div>
     </aside>
 

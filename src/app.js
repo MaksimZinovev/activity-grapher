@@ -495,6 +495,8 @@
     $('#delAll').addEventListener('click', clearDay);
     $('#renameBtn').addEventListener('click', renameBoard);
     $('#exportBtn').addEventListener('click', exportYAML);
+    const pickBtn = $('#pickFolderBtn');
+    if (pickBtn) pickBtn.addEventListener('click', pickFolder);
     $('#yearJump').addEventListener('change', (e) => {
       const y = parseInt(e.target.value, 10);
       if (!isNaN(y)) jumpYear(y);
@@ -520,15 +522,46 @@
 
   /* ---------- storage note ---------- */
   async function checkStorage() {
-    const ok = await VFS.available();
     const note = $('#storageNote');
+    const btn = $('#pickFolderBtn');
     if (!note) return;
-    if (!ok) {
-      note.classList.add('error');
-      note.textContent = 'Storage unavailable — use a Chromium browser and grant access. Changes won’t be saved.';
+    note.classList.remove('error');
+
+    const ready = await VFS.diskReady();
+    if (ready) {
+      note.textContent = 'Data on disk + OPFS backup.';
+      if (btn) btn.style.display = 'none';
+      return;
+    }
+
+    const hasHandle = await VFS.hasDiskHandle();
+    const opfsOk = await VFS.available();
+    if (hasHandle) {
+      note.textContent = 'Click to reconnect data folder.';
+      if (btn) { btn.style.display = ''; btn.textContent = 'Reconnect folder'; }
+    } else if (opfsOk) {
+      note.textContent = 'OPFS only — choose a folder for disk backup.';
+      if (btn) { btn.style.display = ''; btn.textContent = 'Choose data folder'; }
     } else {
-      note.classList.remove('error');
-      note.textContent = 'Data is stored locally in your browser via the File System Access API.';
+      note.classList.add('error');
+      note.textContent = 'Storage unavailable — use a Chromium-based browser.';
+      if (btn) btn.style.display = 'none';
+    }
+  }
+
+  async function pickFolder() {
+    try {
+      const hasHandle = await VFS.hasDiskHandle();
+      if (hasHandle) {
+        if (!(await VFS.requestDiskPermission())) throw new Error('Permission denied');
+      } else {
+        await VFS.pickDirectory();
+        await VFS.migrateOpfsToDisk();
+      }
+      toast('Data folder connected');
+      location.reload();
+    } catch (e) {
+      if (e && e.name !== 'AbortError') toast('Could not connect folder', 'error');
     }
   }
 
